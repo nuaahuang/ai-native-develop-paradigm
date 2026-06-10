@@ -360,7 +360,62 @@ AI 基于这三者，输出变更清单，经人确认后进入开发。
 | Layer 2: Skills | 每个阶段对应一个 Skill 指令 | `SKILL.md`（Cursor/Trae/Claude Code 原生支持） |
 | Layer 3: MCP Server | 外部能力：读 DB、存制品、校验 | 可选，Python/TS 实现 |
 
-### 6.2 Skill 清单
+### 6.2 可插拔架构设计
+
+为确保每个流程阶段和 Skill 都能**独立使用、灵活组合**，采用以下可插拔设计原则：
+
+#### 6.2.1 独立使用原则
+
+| 原则 | 说明 |
+|------|------|
+| 输入输出标准化 | 每个 Skill 定义明确的输入输出格式，不依赖内部状态 |
+| 无状态设计 | Skill 执行不依赖前序 Skill 的执行上下文 |
+| 自包含性 | 每个 Skill 自带必要的配置和默认值 |
+| 渐进增强 | 支持从简单到复杂的使用场景 |
+
+#### 6.2.2 Skill 接口规范
+
+每个 Skill 遵循统一的接口规范，确保可独立调用：
+
+| Skill 名称 | 输入规范 | 输出规范 | 独立使用场景 |
+|-----------|----------|----------|--------------|
+| `spec` | PRD 文本/UI 图片/Product Map（可选） | 变更清单 + UseCase + Task DAG | 单独进行需求分析 |
+| `design-domain` | UseCase + UI Element Tree（可选：Product Map） | 领域模型 + 表结构设计 + 自检报告 | 单独进行领域建模 |
+| `design-api` | 表结构 + UI Element Tree（可选：Product Map） | OpenAPI + UI↔API 映射 + Mock 数据 | 单独进行接口设计 |
+| `align-frontend` | OpenAPI + UI↔API 映射 | 前端 Task 清单 + DAG | 单独进行前端任务拆解 |
+| `impl-backend` | OpenAPI + 表结构（可选：Task DAG） | 后端代码 + 单元测试 + 桩模块 | 单独进行后端开发 |
+| `impl-frontend` | OpenAPI + UI↔API 映射（可选：桩模块） | 前端组件 + API 封装 + 测试 | 单独进行前端开发 |
+| `verify` | 代码仓库 + 测试配置 | 测试报告 + 覆盖率报告 + 验收报告 | 单独进行测试验收 |
+
+#### 6.2.3 Skill 组合机制
+
+支持多种组合方式，满足不同场景需求：
+
+| 组合方式 | 说明 | 适用场景 |
+|----------|------|----------|
+| **全链路执行** | 按顺序执行所有 Skill | 完整迭代开发 |
+| **阶段组合** | 选择连续的几个阶段执行 | 部分迭代（如仅设计阶段） |
+| **单点调用** | 仅执行单个 Skill | 临时任务（如单独生成 Mock） |
+| **条件分支** | 根据前序结果决定是否执行后续 Skill | 灵活流程控制 |
+| **循环调用** | 对多个输入批量执行同一 Skill | 批量处理 |
+
+#### 6.2.4 独立使用示例
+
+```
+# 场景1：仅进行需求分析
+/spec --prd="需求文档.md" --ui="设计稿.png"
+
+# 场景2：仅生成接口文档
+/design-api --schema="schema.json" --elements="ui-elements.json"
+
+# 场景3：仅进行后端开发
+/impl-be --openapi="openapi.yaml" --schema="schema.sql"
+
+# 场景4：仅执行测试验证
+/verify --repo="./src" --test-config="jest.config.js"
+```
+
+### 6.3 Skill 清单
 
 | Skill 名称 | 对应阶段 | 触发方式 |
 |-----------|----------|----------|
@@ -372,7 +427,7 @@ AI 基于这三者，输出变更清单，经人确认后进入开发。
 | `impl-frontend` | Phase 4.2 | `/impl-fe` |
 | `verify` | Phase 5-6 | `/verify` |
 
-### 6.3 推荐技术栈
+### 6.4 推荐技术栈
 
 | 能力 | 推荐 |
 |------|------|
