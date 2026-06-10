@@ -29,29 +29,26 @@
 
 #### PRD 输入格式（Markdown）
 ```markdown
-# 需求文档：订单管理模块 v2.0
+# 需求文档：{模块名称}
 
 ## 1. 需求背景
-为提升用户体验，需要优化订单管理功能，增加物流追踪和批量操作能力。
+{需求背景描述}
 
 ## 2. 功能需求
 
 ### 2.1 新增功能
-- **订单物流追踪**：用户可查看订单的实时物流状态
-- **批量发货**：支持商家批量发货操作
-- **订单导出**：支持导出订单列表为 Excel
+- **{功能名称1}**：{功能描述}
+- **{功能名称2}**：{功能描述}
 
 ### 2.2 修改功能
-- **订单详情页**：增加物流信息展示区域
-- **订单列表页**：增加批量选择和操作按钮
+- **{页面/功能}**：{修改内容}
 
 ### 2.3 删除功能
-- 移除"取消订单"功能（移至售后模块）
+- {删除的功能}
 
 ## 3. 业务规则
-- 物流信息仅对已发货订单显示
-- 批量发货每次最多选择 50 个订单
-- 订单导出支持按时间范围筛选
+- {业务规则1}
+- {业务规则2}
 ```
 
 #### UI 输入格式（JSON，结构化标注）
@@ -59,47 +56,12 @@
 {
   "pages": [
     {
-      "pageName": "订单列表页",
+      "pageName": "{页面名称}",
       "blocks": [
         {
-          "blockName": "筛选栏",
+          "blockName": "{区块名称}",
           "fields": [
-            {"name": "startDate", "label": "开始时间", "type": "date", "required": false},
-            {"name": "endDate", "label": "结束时间", "type": "date", "required": false},
-            {"name": "status", "label": "订单状态", "type": "select", "options": ["全部", "待支付", "已支付", "已发货", "已完成"]}
-          ]
-        },
-        {
-          "blockName": "批量操作区",
-          "fields": [
-            {"name": "selectAll", "label": "全选", "type": "checkbox"},
-            {"name": "batchShip", "label": "批量发货", "type": "button"},
-            {"name": "export", "label": "导出", "type": "button"}
-          ]
-        },
-        {
-          "blockName": "订单列表",
-          "fields": [
-            {"name": "orderNo", "label": "订单编号", "type": "string"},
-            {"name": "customerName", "label": "客户姓名", "type": "string"},
-            {"name": "totalAmount", "label": "订单金额", "type": "decimal"},
-            {"name": "status", "label": "状态", "type": "enum", "options": ["待支付", "已支付", "已发货", "已完成"]},
-            {"name": "createTime", "label": "创建时间", "type": "datetime"},
-            {"name": "actions", "label": "操作", "type": "buttons", "options": ["详情", "发货", "取消"]}
-          ]
-        }
-      ]
-    },
-    {
-      "pageName": "订单详情页",
-      "blocks": [
-        {
-          "blockName": "物流信息",
-          "fields": [
-            {"name": "trackingNo", "label": "运单号", "type": "string"},
-            {"name": "logisticsCompany", "label": "物流公司", "type": "string"},
-            {"name": "trackingStatus", "label": "物流状态", "type": "string"},
-            {"name": "trackingSteps", "label": "物流轨迹", "type": "list", "items": ["时间", "地点", "状态"]}
+            {"name": "{字段名}", "label": "{标签}", "type": "{类型}", "required": true/false}
           ]
         }
       ]

@@ -49,15 +49,12 @@
 {
   "pages": [
     {
-      "pageName": "订单列表页",
+      "pageName": "{页面名称}",
       "blocks": [
         {
-          "blockName": "订单卡片",
+          "blockName": "{区块名称}",
           "fields": [
-            {"name": "orderId", "label": "订单编号", "type": "string", "required": true},
-            {"name": "orderStatus", "label": "订单状态", "type": "enum", "options": ["待支付", "已支付", "已发货", "已完成"]},
-            {"name": "totalAmount", "label": "订单金额", "type": "decimal", "required": true},
-            {"name": "createTime", "label": "创建时间", "type": "datetime", "required": true}
+            {"name": "{字段名}", "label": "{标签}", "type": "{类型}", "required": true/false}
           ]
         }
       ]
