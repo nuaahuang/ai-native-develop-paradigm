@@ -1,69 +1,178 @@
 {
   "requirements": [
     {
-      "name": "订单创建",
-      "description": "用户可以创建新订单，需要验证商品库存",
-      "func_type": "新增",
+      "name": "推荐卡片展示信息内容优化",
+      "description": "优化推荐卡片展示，包括舌象、体质、食疗结果卡",
+      "func_type": "优化",
       "work_items": [
         {
-          "name": "订单表结构设计",
-          "hours": 1.5,
-          "description": "设计订单数据表结构"
+          "name": "舌象结果卡优化",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 1.5,
+          "frontend_hours": 2.0,
+          "description": "优化舌象检测结果卡片展示",
+          "children": [
+            {
+              "name": "舌象结果接口开发",
+              "type": "接口开发",
+              "level": "interface",
+              "backend_hours": 1.0,
+              "frontend_hours": 0.0
+            },
+            {
+              "name": "舌象卡片组件开发",
+              "type": "接口开发",
+              "level": "interface",
+              "backend_hours": 0.5,
+              "frontend_hours": 2.0
+            }
+          ]
         },
         {
-          "name": "创建订单接口开发",
-          "hours": 1.0,
-          "description": "开发订单创建接口"
+          "name": "体质结果卡优化",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 1.0,
+          "frontend_hours": 2.0,
+          "description": "优化体质检测结果卡片展示"
         },
         {
-          "name": "库存校验逻辑实现",
-          "hours": 2.0,
-          "description": "实现库存校验和Mock数据"
+          "name": "食疗结果卡优化",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 1.0,
+          "frontend_hours": 2.0,
+          "description": "优化食疗检测结果卡片展示"
         }
       ],
-      "notes": "需要调用库存服务接口进行库存校验",
-      "explanation": "订单创建时需要验证商品库存是否充足",
-      "clarifications": ["库存不足时的错误提示语是什么？"]
+      "notes": "三种卡片统一设计风格",
+      "explanation": "优化推荐卡片展示信息内容",
+      "clarifications": []
     },
     {
-      "name": "订单查询",
-      "description": "支持按条件查询订单列表，支持分页",
+      "name": "推荐卡片新增",
+      "description": "新增调理相关推荐卡片",
       "func_type": "新增",
       "work_items": [
         {
-          "name": "订单列表查询接口开发",
-          "hours": 1.0,
-          "description": "开发订单查询接口"
+          "name": "调理方案推荐卡",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 2.0,
+          "frontend_hours": 2.5,
+          "description": "展示推荐的调理方案"
         },
         {
-          "name": "筛选条件参数设计",
-          "hours": 1.0,
-          "description": "设计查询筛选参数"
+          "name": "调理启动卡（支付后启动前）",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 1.5,
+          "frontend_hours": 2.0,
+          "description": "支付后的启动引导卡片"
         }
       ],
-      "notes": "考虑分页和筛选条件",
-      "explanation": "查询功能需要支持分页和条件筛选",
-      "clarifications": ["是否需要支持模糊搜索？"]
+      "notes": "需要与支付流程联动",
+      "explanation": "新增调理相关推荐卡片",
+      "clarifications": []
     },
     {
-      "name": "AI智能推荐",
-      "description": "根据用户历史订单推荐相似商品",
+      "name": "报告页调理方案入口",
+      "description": "在报告页面底部添加调理入口",
       "func_type": "新增",
       "work_items": [
         {
-          "name": "推荐接口开发",
-          "hours": 4.0,
-          "description": "调用Dify接口获取推荐结果并mock数据"
+          "name": "食疗/舌象报告底部调理入口",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 1.0,
+          "frontend_hours": 1.5,
+          "description": "在食疗和舌象报告页底部添加调理方案入口"
         }
       ],
-      "notes": "需要调用外部AI服务",
-      "explanation": "通过Dify接口获取智能推荐结果",
-      "clarifications": ["推荐结果的返回格式是什么？"]
+      "notes": "需要区分不同报告类型",
+      "explanation": "在报告页面底部添加调理入口",
+      "clarifications": []
+    },
+    {
+      "name": "生成调理方案",
+      "description": "根据不同检测结果生成调理方案",
+      "func_type": "新增",
+      "work_items": [
+        {
+          "name": "根据食疗生成调理方案",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 2.0,
+          "frontend_hours": 0.5,
+          "description": "调用AI根据食疗结果生成调理方案"
+        },
+        {
+          "name": "根据舌象生成调理方案",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 2.0,
+          "frontend_hours": 0.5,
+          "description": "调用AI根据舌象结果生成调理方案"
+        },
+        {
+          "name": "根据体质检测生成调理方案",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 2.0,
+          "frontend_hours": 0.5,
+          "description": "调用AI根据体质检测结果生成调理方案"
+        }
+      ],
+      "notes": "需要调用Dify接口",
+      "explanation": "根据不同检测结果生成调理方案",
+      "clarifications": []
+    },
+    {
+      "name": "下单付款支付闭环",
+      "description": "实现完整的下单付款流程",
+      "func_type": "新增",
+      "work_items": [
+        {
+          "name": "商品管理（纯后端代码）",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 2.0,
+          "frontend_hours": 0.0,
+          "description": "商品信息管理、核销码生成"
+        },
+        {
+          "name": "地址管理/添加、选择地址页",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 3.0,
+          "frontend_hours": 3.0,
+          "description": "地址CRUD操作、默认地址管理"
+        },
+        {
+          "name": "订单管理/确认订单页",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 2.0,
+          "frontend_hours": 2.0,
+          "description": "订单确认、价格计算"
+        },
+        {
+          "name": "支付管理/微信支付",
+          "type": "功能模块",
+          "level": "page",
+          "backend_hours": 4.0,
+          "frontend_hours": 2.0,
+          "description": "微信支付发起、回调处理"
+        }
+      ],
+      "notes": "需要对接微信支付API",
+      "explanation": "实现完整的下单付款流程",
+      "clarifications": []
     }
   ],
   "business_rules": [
-    "订单创建时需要调用库存服务接口验证商品库存",
-    "订单状态只能从待支付→已支付→已发货→已完成",
-    "AI推荐需要调用Dify接口获取推荐结果"
+    "用户添加首条地址，系统自动设为默认地址",
+    "支付成功后跳转到启动说明页"
   ]
 }

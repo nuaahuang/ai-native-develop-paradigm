@@ -4,7 +4,7 @@ import json
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from requirement_split import RequirementItem, WorkItem, MarkdownGenerator
+from requirement_split import RequirementItem, WorkItem, CSVGenerator
 
 
 class TestRequirementSplit(unittest.TestCase):
@@ -15,7 +15,7 @@ class TestRequirementSplit(unittest.TestCase):
             "description": "用户可以创建新订单",
             "func_type": "新增",
             "work_items": [
-                {"name": "表结构设计", "hours": 1.0, "description": "设计数据表"}
+                {"name": "表结构设计", "type": "后端", "backend_hours": 1.0, "frontend_hours": 0.0, "description": "设计数据表"}
             ],
             "notes": "注意点",
             "explanation": "说明",
@@ -29,40 +29,44 @@ class TestRequirementSplit(unittest.TestCase):
         self.assertEqual(req.func_type, "新增")
         self.assertEqual(len(req.work_items), 1)
         self.assertEqual(req.work_items[0].name, "表结构设计")
-        self.assertEqual(req.work_items[0].hours, 1.0)
+        self.assertEqual(req.work_items[0].type, "后端")
+        self.assertEqual(req.work_items[0].backend_hours, 1.0)
+        self.assertEqual(req.work_items[0].frontend_hours, 0.0)
         self.assertEqual(req.notes, "注意点")
         self.assertEqual(req.explanation, "说明")
         self.assertEqual(req.clarifications, ["问题1"])
 
     def test_work_item(self):
-        work_item = WorkItem("接口开发", 0.5, "开发接口")
+        work_item = WorkItem("接口开发", "后端", 1.0, 0.0, "开发接口")
         self.assertEqual(work_item.name, "接口开发")
-        self.assertEqual(work_item.hours, 0.5)
+        self.assertEqual(work_item.type, "后端")
+        self.assertEqual(work_item.backend_hours, 1.0)
+        self.assertEqual(work_item.frontend_hours, 0.0)
         self.assertEqual(work_item.description, "开发接口")
 
     def test_generate_work_plan(self):
         req1 = RequirementItem("订单创建", "描述1", "新增")
-        req1.work_items.append(WorkItem("表结构设计", 1.0, "设计"))
-        req1.work_items.append(WorkItem("接口开发", 0.5, "开发"))
+        req1.work_items.append(WorkItem("表结构设计", "后端", 1.0, 0.0, "设计"))
+        req1.work_items.append(WorkItem("接口开发", "后端", 0.5, 0.0, "开发"))
         
-        md = MarkdownGenerator.generate_work_plan([req1])
+        csv = CSVGenerator.generate_work_plan([req1])
         
-        self.assertIn("订单创建", md)
-        self.assertIn("表结构设计", md)
-        self.assertIn("1.0", md)
-        self.assertIn("总计", md)
+        self.assertIn("订单创建", csv)
+        self.assertIn("表结构设计", csv)
+        self.assertIn("1.0", csv)
+        self.assertIn("总计", csv)
 
-    def test_generate_breakdown(self):
-        req1 = RequirementItem("订单查询", "查询订单", "新增")
-        req1.notes = "注意分页"
-        req1.clarifications = ["是否模糊搜索?"]
+    def test_generate_work_plan_with_frontend(self):
+        req1 = RequirementItem("订单创建", "描述1", "新增")
+        req1.work_items.append(WorkItem("订单表单页面", "前端", 0.0, 3.0, "前端页面"))
+        req1.work_items.append(WorkItem("创建订单接口", "后端", 1.0, 0.0, "后端接口"))
         
-        md = MarkdownGenerator.generate_breakdown([req1], ["规则1"])
+        csv = CSVGenerator.generate_work_plan([req1])
         
-        self.assertIn("订单查询", md)
-        self.assertIn("注意分页", md)
-        self.assertIn("是否模糊搜索?", md)
-        self.assertIn("规则1", md)
+        self.assertIn("前端", csv)
+        self.assertIn("后端", csv)
+        self.assertIn("3.0", csv)
+        self.assertIn("1.0", csv)
 
 
 if __name__ == '__main__':

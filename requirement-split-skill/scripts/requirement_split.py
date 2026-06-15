@@ -5,10 +5,14 @@ from typing import List, Dict, Any
 
 
 class WorkItem:
-    def __init__(self, name: str, hours: float = 0.5, description: str = ""):
+    def __init__(self, name: str, type: str = "后端", level: str = "page", backend_hours: float = 0.0, frontend_hours: float = 0.0, description: str = "", children: List = None):
         self.name = name
-        self.hours = hours
+        self.type = type
+        self.level = level
+        self.backend_hours = backend_hours
+        self.frontend_hours = frontend_hours
         self.description = description
+        self.children = children if children else []
 
 
 class RequirementItem:
@@ -28,10 +32,24 @@ class RequirementItem:
         req.explanation = data.get("explanation", "")
         req.clarifications = data.get("clarifications", [])
         for work_item_data in data.get("work_items", []):
+            children = []
+            for child_data in work_item_data.get("children", []):
+                children.append(WorkItem(
+                    child_data["name"],
+                    child_data.get("type", "接口开发"),
+                    child_data.get("level", "interface"),
+                    child_data.get("backend_hours", child_data.get("hours", 0.0)),
+                    child_data.get("frontend_hours", 0.0),
+                    child_data.get("description", "")
+                ))
             req.work_items.append(WorkItem(
                 work_item_data["name"],
-                work_item_data.get("hours", 0.5),
-                work_item_data.get("description", "")
+                work_item_data.get("type", "后端"),
+                work_item_data.get("level", "page"),
+                work_item_data.get("backend_hours", work_item_data.get("hours", 0.0)),
+                work_item_data.get("frontend_hours", 0.0),
+                work_item_data.get("description", ""),
+                children
             ))
         return req
 
@@ -39,11 +57,15 @@ class RequirementItem:
 class CSVGenerator:
     @staticmethod
     def generate_work_plan(requirements: List[RequirementItem]) -> str:
-        lines = ["需求项,工作项,预计后端工时（小时）,说明"]
-        total_hours = 0.0
+        lines = ["需求项,工作项,预计后端工时（小时）,预计前端工时（小时）,说明"]
+        total_backend_hours = 0.0
+        total_frontend_hours = 0.0
         
         for req_item in requirements:
             for work_item in req_item.work_items:
+                if work_item.level != "page":
+                    continue
+                
                 name = req_item.name.replace('"', '""')
                 work_name = work_item.name.replace('"', '""')
                 desc = work_item.description.replace('"', '""')
@@ -52,10 +74,15 @@ class CSVGenerator:
                     full_desc = full_desc.replace('"', '""')
                 else:
                     full_desc = desc
-                lines.append(f'"{name}","{work_name}",{work_item.hours},"{full_desc}"')
-                total_hours += work_item.hours
+                
+                backend_hours = work_item.backend_hours
+                frontend_hours = work_item.frontend_hours
+                
+                lines.append(f'"{name}","{work_name}",{backend_hours},{frontend_hours},"{full_desc}"')
+                total_backend_hours += backend_hours
+                total_frontend_hours += frontend_hours
         
-        lines.append(f'"总计","-",{total_hours},"-"')
+        lines.append(f'"总计","-",{total_backend_hours},{total_frontend_hours},"-"')
         return '\n'.join(lines)
 
 
