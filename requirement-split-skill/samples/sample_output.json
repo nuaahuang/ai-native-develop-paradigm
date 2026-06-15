@@ -4,6 +4,10 @@
       "name": "推荐卡片展示信息内容优化",
       "description": "优化推荐卡片展示，包括舌象、体质、食疗结果卡",
       "func_type": "优化",
+      "priority": "P0",
+      "dependencies": [],
+      "risk": "三种卡片统一设计风格，需前端组件复用",
+      "milestone": "M1 - 核心对话体验",
       "work_items": [
         {
           "name": "舌象结果卡优化",
@@ -54,6 +58,10 @@
       "name": "推荐卡片新增",
       "description": "新增调理相关推荐卡片",
       "func_type": "新增",
+      "priority": "P0",
+      "dependencies": ["推荐卡片展示信息内容优化"],
+      "risk": "需要与支付流程联动",
+      "milestone": "M1 - 核心对话体验",
       "work_items": [
         {
           "name": "调理方案推荐卡",
@@ -80,6 +88,10 @@
       "name": "报告页调理方案入口",
       "description": "在报告页面底部添加调理入口",
       "func_type": "新增",
+      "priority": "P1",
+      "dependencies": ["推荐卡片展示信息内容优化"],
+      "risk": "无",
+      "milestone": "M2 - 报告与入口",
       "work_items": [
         {
           "name": "食疗/舌象报告底部调理入口",
@@ -98,6 +110,10 @@
       "name": "生成调理方案",
       "description": "根据不同检测结果生成调理方案",
       "func_type": "新增",
+      "priority": "P0",
+      "dependencies": ["报告页调理方案入口"],
+      "risk": "依赖Dify AI接口，接口稳定性需关注",
+      "milestone": "M1 - 核心对话体验",
       "work_items": [
         {
           "name": "根据食疗生成调理方案",
@@ -132,6 +148,10 @@
       "name": "下单付款支付闭环",
       "description": "实现完整的下单付款流程",
       "func_type": "新增",
+      "priority": "P0",
+      "dependencies": ["生成调理方案"],
+      "risk": "微信支付API依赖外部审核，地址管理逻辑复杂",
+      "milestone": "M1 - 核心对话体验",
       "work_items": [
         {
           "name": "商品管理（纯后端代码）",

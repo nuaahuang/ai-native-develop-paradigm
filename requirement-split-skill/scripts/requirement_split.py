@@ -20,6 +20,10 @@ class RequirementItem:
         self.name = name
         self.description = description
         self.func_type = func_type
+        self.priority = "P2"
+        self.dependencies: List[str] = []
+        self.risk = ""
+        self.milestone = ""
         self.work_items: List[WorkItem] = []
         self.notes = ""
         self.explanation = ""
@@ -28,6 +32,10 @@ class RequirementItem:
     @classmethod
     def from_dict(cls, data: Dict):
         req = cls(data["name"], data.get("description", ""), data.get("func_type", "新增"))
+        req.priority = data.get("priority", "P2")
+        req.dependencies = data.get("dependencies", [])
+        req.risk = data.get("risk", "")
+        req.milestone = data.get("milestone", "")
         req.notes = data.get("notes", "")
         req.explanation = data.get("explanation", "")
         req.clarifications = data.get("clarifications", [])
@@ -57,7 +65,7 @@ class RequirementItem:
 class CSVGenerator:
     @staticmethod
     def generate_work_plan(requirements: List[RequirementItem]) -> str:
-        lines = ["需求项,工作项,预计后端工时（小时）,预计前端工时（小时）,说明"]
+        lines = ["需求项,工作项,优先级,预计后端工时（小时）,预计前端工时（小时）,说明"]
         total_backend_hours = 0.0
         total_frontend_hours = 0.0
         
@@ -68,6 +76,7 @@ class CSVGenerator:
                 
                 name = req_item.name.replace('"', '""')
                 work_name = work_item.name.replace('"', '""')
+                priority = req_item.priority
                 desc = work_item.description.replace('"', '""')
                 if req_item.explanation:
                     full_desc = f"{desc}【说明】{req_item.explanation}" if desc else f"【说明】{req_item.explanation}"
@@ -78,11 +87,11 @@ class CSVGenerator:
                 backend_hours = work_item.backend_hours
                 frontend_hours = work_item.frontend_hours
                 
-                lines.append(f'"{name}","{work_name}",{backend_hours},{frontend_hours},"{full_desc}"')
+                lines.append(f'"{name}","{work_name}","{priority}",{backend_hours},{frontend_hours},"{full_desc}"')
                 total_backend_hours += backend_hours
                 total_frontend_hours += frontend_hours
         
-        lines.append(f'"总计","-",{total_backend_hours},{total_frontend_hours},"-"')
+        lines.append(f'"总计","-","-",{total_backend_hours},{total_frontend_hours},"-"')
         return '\n'.join(lines)
 
 
