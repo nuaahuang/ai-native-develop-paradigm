@@ -1,0 +1,69 @@
+{
+  "requirements": [
+    {
+      "name": "订单创建",
+      "description": "用户可以创建新订单，需要验证商品库存",
+      "func_type": "新增",
+      "work_items": [
+        {
+          "name": "订单表结构设计",
+          "hours": 1.5,
+          "description": "设计订单数据表结构"
+        },
+        {
+          "name": "创建订单接口开发",
+          "hours": 1.0,
+          "description": "开发订单创建接口"
+        },
+        {
+          "name": "库存校验逻辑实现",
+          "hours": 2.0,
+          "description": "实现库存校验和Mock数据"
+        }
+      ],
+      "notes": "需要调用库存服务接口进行库存校验",
+      "explanation": "订单创建时需要验证商品库存是否充足",
+      "clarifications": ["库存不足时的错误提示语是什么？"]
+    },
+    {
+      "name": "订单查询",
+      "description": "支持按条件查询订单列表，支持分页",
+      "func_type": "新增",
+      "work_items": [
+        {
+          "name": "订单列表查询接口开发",
+          "hours": 1.0,
+          "description": "开发订单查询接口"
+        },
+        {
+          "name": "筛选条件参数设计",
+          "hours": 1.0,
+          "description": "设计查询筛选参数"
+        }
+      ],
+      "notes": "考虑分页和筛选条件",
+      "explanation": "查询功能需要支持分页和条件筛选",
+      "clarifications": ["是否需要支持模糊搜索？"]
+    },
+    {
+      "name": "AI智能推荐",
+      "description": "根据用户历史订单推荐相似商品",
+      "func_type": "新增",
+      "work_items": [
+        {
+          "name": "推荐接口开发",
+          "hours": 4.0,
+          "description": "调用Dify接口获取推荐结果并mock数据"
+        }
+      ],
+      "notes": "需要调用外部AI服务",
+      "explanation": "通过Dify接口获取智能推荐结果",
+      "clarifications": ["推荐结果的返回格式是什么？"]
+    }
+  ],
+  "business_rules": [
+    "订单创建时需要调用库存服务接口验证商品库存",
+    "订单状态只能从待支付→已支付→已发货→已完成",
+    "AI推荐需要调用Dify接口获取推荐结果"
+  ]
+}
