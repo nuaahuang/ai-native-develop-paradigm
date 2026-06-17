@@ -306,7 +306,7 @@ test:
 - **HTTPS强制**：非本地服务必须使用HTTPS协议，禁止HTTP明文传输
 - **禁止模式**：禁止访问 `aws`、`alibaba`、`tencent`、`kubernetes` 等敏感关键词域名
 - **动态配置允许域名**：通过环境变量 `API_ALLOWED_DOMAINS=domain1,domain2` 配置额外允许的域名
-- **用户确认**：执行网络请求前，AI会展示目标URL和Headers，需要用户确认后才执行
+- **用户确认机制**：Skill AI 在执行网络请求前，必须向用户展示目标URL和掩码后的Headers，获得用户明确确认后才执行
 
 ### 配置示例
 
@@ -315,6 +315,23 @@ test:
 export API_ALLOWED_DOMAINS="company.com,intranet.example.com"
 python skill_driver.py run --all
 ```
+
+### AI交互安全确认流程
+
+```
+用户："运行所有测试"
+  ↓
+AI：即将执行测试，目标信息：
+  - Base URL: https://api.example.com
+  - Headers: Authorization: Bearer {masked}...
+  - 共计 X 个接口将被调用
+  ↓
+用户：确认执行
+  ↓
+AI：调用 skill_driver.py 执行测试
+```
+
+这样可以避免未经用户确认就向外部发送请求，符合安全要求。
 
 ### 权限模型
 - 本Skill只读取用户指定范围内的Java源码和Swagger文档
