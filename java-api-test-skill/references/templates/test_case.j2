@@ -1,0 +1,22 @@
+from core.base_test import BaseTest
+from apis.{{ module_name }}_api import {{ module_name | title }}Api
+
+
+class Test{{ module_name | title }}Api(BaseTest):
+    {% for test_case in test_cases %}
+    def test_{{ test_case.name }}(self):
+        """{{ test_case.description }}"""
+        {% if test_case.method == 'GET' %}
+        response = {{ module_name | title }}Api.{{ test_case.method.lower() }}_{{ test_case.name.split('_')[1] if '_' in test_case.name else test_case.name }}(self.client{{ ', params=' + test_case.params if test_case.params else '' }})
+        {% elif test_case.method in ['POST', 'PUT'] %}
+        payload = {{ test_case.payload | tojson }}
+        response = {{ module_name | title }}Api.{{ test_case.method.lower() }}_{{ test_case.name.split('_')[1] if '_' in test_case.name else test_case.name }}(self.client, payload)
+        {% elif test_case.method == 'DELETE' %}
+        response = {{ module_name | title }}Api.{{ test_case.method.lower() }}_{{ test_case.name.split('_')[1] if '_' in test_case.name else test_case.name }}(self.client)
+        {% endif %}
+        
+        self.assert_status_{{ test_case.expected_status | status_to_method }}(response)
+        {% if test_case.expected_keys %}
+        self.assert_response_json(response, {{ test_case.expected_keys }})
+        {% endif %}
+    {% endfor %}
