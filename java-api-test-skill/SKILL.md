@@ -40,24 +40,30 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 └── api_test_config.yaml     # 配置文件 (# 可修改)
 
 java-api-test-skill/
-└── references/             # Skill核心框架 (# 固定，不变)
-    └── core/
-        ├── api_scanner.py     # 接口扫描器（含安全检查）
-        ├── base_test.py       # 测试基类（断言工具）
-        ├── http_client.py     # HTTP客户端（含域名安全验证）
-        ├── report_generator.py  # HTML/JSON报告生成
-        ├── run_tests.py      # 多线程测试执行器
-        └── skill_driver.py  # Skill驱动入口（命令路由）
+├── SKILL.md              # 技能说明 (# fixed)
+├── scripts/             # 可执行脚本 (# fixed)
+│   └── core/
+│       ├── api_scanner.py     # 接口扫描器（含安全检查）
+│       ├── base_test.py       # 测试基类（断言工具）
+│       ├── http_client.py     # HTTP客户端（含域名安全验证）
+│       ├── report_generator.py  # HTML/JSON报告生成
+│       ├── run_tests.py      # 多线程测试执行器
+│       └── skill_driver.py  # Skill驱动入口（命令路由）
+└── references/           # 参考文档和模板 (# fixed)
+    └── templates/
+        ├── config.yaml      # 配置模板
+        └── test_case.j2     # 测试用例模板
 ```
 
 ### 文件类型说明
 
 | 标识 | 位置 | 说明 |
 |------|------|------|
-| **固定** | `references/core/` | 核心框架代码，稳定后无需修改 |
-| **可修改** | `api_test_config.yaml` | 用户配置文件，可按需调整 |
-| **动态生成** | `apis/` `output/tests/` | AI生成的接口定义和测试用例 |
-| **输出** | `output/reports/` | HTML + JSON 测试报告 |
+| **固定** | `scripts/core/` | 核心可执行脚本，稳定后无需修改 |
+| **可修改** | `{your-project}/api_test_config.yaml` | 用户配置文件，可按需调整 |
+| **动态生成** | `{your-project}/apis/` `{your-project}/output/tests/` | AI生成的接口定义和测试用例 |
+| **输出** | `{your-project}/output/reports/` | HTML + JSON 测试报告 |
+| **模板** | `references/templates/` | 代码生成模板 |
 
 ## 核心工作流程（AI Skill驱动）
 
@@ -142,7 +148,7 @@ AI：调用 skill_driver.py 执行测试
 - 只向用户指定的API端点发送测试请求
 - 所有文件操作和网络请求都由用户明确授权后执行
 
-## 驱动命令（skill_driver.py）
+## 驱动命令（scripts/core/skill_driver.py）
 
 | 命令 | 参数 | 说明 |
 |------|------|------|
