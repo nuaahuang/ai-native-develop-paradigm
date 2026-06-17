@@ -305,6 +305,16 @@ test:
 - **禁止访问云元数据**：禁止访问 `metadata`、`169.254.` 等云平台敏感地址
 - **HTTPS强制**：非本地服务必须使用HTTPS协议，禁止HTTP明文传输
 - **禁止模式**：禁止访问 `aws`、`alibaba`、`tencent`、`kubernetes` 等敏感关键词域名
+- **动态配置允许域名**：通过环境变量 `API_ALLOWED_DOMAINS=domain1,domain2` 配置额外允许的域名
+- **用户确认**：执行网络请求前，AI会展示目标URL和Headers，需要用户确认后才执行
+
+### 配置示例
+
+```bash
+# 允许企业内部域名
+export API_ALLOWED_DOMAINS="company.com,intranet.example.com"
+python skill_driver.py run --all
+```
 
 ### 权限模型
 - 本Skill只读取用户指定范围内的Java源码和Swagger文档
