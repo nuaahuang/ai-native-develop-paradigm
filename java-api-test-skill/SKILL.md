@@ -13,7 +13,7 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 ## 概述
 
 基于AI驱动的Java接口测试自动化工具，采用**分层架构设计**：
-- **核心框架**：`references/core/`，稳定不变，包含扫描器、HTTP客户端、测试执行器、报告生成器
+- **核心框架**：`scripts/`，稳定不变，包含扫描器、HTTP客户端、测试执行器、报告生成器
 - **接口定义**：`apis/`，动态生成，每个模块一个文件，便于增量更新
 - **测试用例**：`output/tests/`，动态生成，AI根据依赖关系自动编排测试链
 
@@ -59,7 +59,7 @@ java-api-test-skill/
 
 | 标识 | 位置 | 说明 |
 |------|------|------|
-| **固定** | `scripts/core/` | 核心可执行脚本，稳定后无需修改 |
+| **固定** | `scripts/` | 核心可执行脚本，稳定后无需修改 |
 | **可修改** | `{your-project}/api_test_config.yaml` | 用户配置文件，可按需调整 |
 | **动态生成** | `{your-project}/apis/` `{your-project}/output/tests/` | AI生成的接口定义和测试用例 |
 | **输出** | `{your-project}/output/reports/` | HTML + JSON 测试报告 |
@@ -148,7 +148,7 @@ AI：调用 skill_driver.py 执行测试
 - 只向用户指定的API端点发送测试请求
 - 所有文件操作和网络请求都由用户明确授权后执行
 
-## 驱动命令（scripts/core/skill_driver.py）
+## 驱动命令（scripts/skill_driver.py）
 
 | 命令 | 参数 | 说明 |
 |------|------|------|
