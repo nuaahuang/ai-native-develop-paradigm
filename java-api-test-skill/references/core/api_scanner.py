@@ -8,7 +8,13 @@ from typing import List, Dict, Any, Optional
 
 
 def _sanitize_scan_path(scan_path: str) -> str:
-    """安全检查扫描路径，限制只能在当前工作目录内扫描
+    """安全检查扫描路径，严格限制扫描范围
+    
+    Security rules:
+    1. 必须在当前工作目录范围内
+    2. 只能扫描允许的子目录：src/, src/main/, swagger/, api/, controller/, controllers/
+    3. 禁止扫描敏感目录和文件
+    4. 路径规范化，防止..绕过
     
     Args:
         scan_path: 用户提供的扫描路径
@@ -17,29 +23,69 @@ def _sanitize_scan_path(scan_path: str) -> str:
         规范化后的绝对路径
         
     Raises:
-        ValueError: 如果路径超出工作目录范围或包含敏感模式
+        ValueError: 如果路径超出限制或包含敏感模式
     """
     cwd = os.path.abspath(os.getcwd())
     abs_path = os.path.abspath(os.path.expanduser(scan_path))
     
-    # 检查是否在当前工作目录内
+    # 检查是否在当前工作目录内（防止 .. 绕过）
     if not abs_path.startswith(cwd):
         raise ValueError(
-            f"扫描路径 '{abs_path}' 超出当前工作目录 '{cwd}'\n"
+            f"[SECURITY] 扫描路径 '{abs_path}' 超出当前工作目录 '{cwd}'\n"
             "安全限制：只能扫描当前工作目录范围内的文件"
+        )
+    
+    # 白名单：允许扫描的目录后缀
+    ALLOWED_DIR_SUFFIXES = [
+        '/src', '/src/', '/src/main', '/src/main/',
+        '/swagger', '/swagger/',
+        '/api', '/api/',
+        '/controller', '/controllers',
+        '/controller/', '/controllers/',
+    ]
+    
+    # 检查路径是否在允许的白名单目录内
+    allowed = False
+    for suffix in ALLOWED_DIR_SUFFIXES:
+        if abs_path.endswith(suffix) or suffix in abs_path:
+            allowed = True
+            break
+    
+    # 允许直接在当前工作目录扫描（有些项目结构可能不同）
+    # 但单个文件仍然需要检查扩展名
+    if abs_path == cwd:
+        allowed = True
+    
+    # 允许具体的单个文件（仅允许指定扩展名）
+    if os.path.isfile(abs_path):
+        # 允许.java/.json/.yml/.yaml 文件
+        ext = os.path.splitext(abs_path)[1].lower()
+        if ext in ['.java', '.json', '.yml', '.yaml', '.swagger']:
+            allowed = True
+        else:
+            # 如果已经被目录白名单放过了（比如在src下的非java文件），保持allowed
+            if not allowed:
+                allowed = False
+    
+    if not allowed:
+        raise ValueError(
+            f"[SECURITY] 扫描路径 '{abs_path}' 不在允许的白名单目录内\n"
+            f"允许的目录：{ALLOWED_DIR_SUFFIXES}\n"
+            "允许的文件：.java, .json, .yml, .yaml\n"
+            "安全提示：本工具仅用于扫描项目源码和API文档，请将扫描路径限制在src/或swagger/目录下"
         )
     
     # 禁止扫描敏感目录
     forbidden_patterns = [
-        '/etc/', '/root/', '/home/', '/var/', '/usr/',
-        '.ssh', '.git', '.config', '.aws', '.docker',
+        '/etc/', '/root/', '/home/', '/var/', '/usr/', '/tmp/',
+        '.ssh', '.git', '.config', '.aws', '.docker', '.npm',
         'id_rsa', 'id_dsa', 'authorized_keys',
-        'password', 'secret', 'token', 'key',
+        'password', 'secret', 'token', 'key', '.env',
     ]
     for pattern in forbidden_patterns:
         if pattern in abs_path.lower():
             raise ValueError(
-                f"扫描路径 '{abs_path}' 包含敏感目录/文件名 '{pattern}'，禁止扫描"
+                f"[SECURITY] 扫描路径 '{abs_path}' 包含敏感目录/文件名 '{pattern}'，禁止扫描"
             )
     
     return abs_path
