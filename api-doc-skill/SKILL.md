@@ -1,21 +1,24 @@
 ---
 name: api-doc
-description: 自动生成和更新 Markdown 格式的接口文档。支持从选中的代码中提取接口信息，自动判断接口是否已存在，支持上传 UI 截图。
+description: 版本迭代过程中，快速生成供前后端交流用的 Markdown 接口文档。支持从选中代码自动提取接口定义，增量更新，多版本分组管理。不生成机器消费的 OpenAPI，专注人工阅读交流。本工具只生成文档和测试示例代码，不实际发送网络请求。
 author: deganghuang
-version: 1.0.0
+version: 2.0.0
 ---
 
 # api-doc
 
 ## 命令
 
-/api-doc --output="./docs/api.md" [--api-name="接口名称"] [--image-format="base64"]
+/api-doc --output="./docs/api.md" [options]
 
 ## 使用场景
 
 - 当需要生成或更新接口文档时触发
 - 用户在编辑器中选中接口代码后触发
 - 用户上传 UI 截图并需要生成带图标的接口文档时触发
+- 需要批量扫描整个项目生成完整文档时触发
+- 需要按版本分组管理多版本文档时触发
+- 需要导出 OpenAPI 格式集成到其他工具时触发
 
 ## 参数说明
 
@@ -23,9 +26,14 @@ version: 1.0.0
 |------|------|------|
 | --output | 是 | 输出文档路径，如 ./docs/api.md |
 | --api-name | 否 | 接口名称，不指定则自动推断 |
+| --version | 否 | API 版本，如 v1、v2，多版本分组管理 |
+| --scan-dir | 否 | 批量扫描目录，一次性生成所有接口文档 |
+| --exclude | 否 | 批量扫描时额外排除的模式，多个用空格分隔 |
+| --export-openapi | 否 | 导出 OpenAPI 3.0 文件路径，支持 .json/.yaml |
 | --image-format | 否 | 图片格式：local（默认）/ base64 / url |
 | --image-upload | 否 | 图片上传目标：wecom / qiniu / oss |
 | --image-dir | 否 | 本地图片保存目录（默认：./images） |
+| --config | 否 | 配置文件路径（JSON 格式） |
 
 ## 工作流程
 
@@ -41,6 +49,8 @@ version: 1.0.0
 |-----------|----------|
 | Java Spring | `@GetMapping("/api/report/{id}")` |
 | Python FastAPI | `@app.get("/api/report/{id}")` |
+| Python Django REST Framework | `@api_view(['GET'])` |
+| Python Flask | `@app.route("/api/report/<id>")` |
 | Express | `app.get("/api/report/:id")` |
 | Go Gin | `r.GET("/api/report/:id")` |
 | 纯文本 URL | `GET /api/report/{id}` |
@@ -107,7 +117,7 @@ version: 1.0.0
 
 ## 示例
 
-### 示例 1：基本用法
+### 示例 1：基本用法（单个接口）
 
 ```
 /api-doc --output="./docs/api.md"
@@ -123,6 +133,31 @@ version: 1.0.0
 
 ```
 /api-doc --output="./docs/api.md" --image-format="base64"
+```
+
+### 示例 4：批量扫描整个项目
+
+```
+/api-doc --output="./docs/api.md" --scan-dir=./src --exclude=tests
+```
+
+### 示例 5：指定版本分组
+
+```
+/api-doc --output="./docs/api.md" --scan-dir=./src/v1 --version=v1
+/api-doc --output="./docs/api.md" --scan-dir=./src/v2 --version=v2
+```
+
+### 示例 6：同时导出 OpenAPI
+
+```
+/api-doc --output="./docs/api.md" --scan-dir=./src --export-openapi=./docs/openapi.json
+```
+
+### 示例 7：导出 OpenAPI YAML 格式
+
+```
+/api-doc --output="./docs/api.md" --export-openapi=./docs/openapi.yaml
 ```
 
 ## 注意事项
