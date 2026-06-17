@@ -294,6 +294,7 @@ class ApiScanner:
         """解析Swagger V2规范"""
         apis = []
         base_path = spec.get('basePath', '')
+        definitions = spec.get('definitions', {})
         
         for path, path_item in spec.get('paths', {}).items():
             full_path = f"{base_path}{path}"
@@ -305,16 +306,97 @@ class ApiScanner:
                 tags = operation.get('tags', [])
                 module = tags[0] if tags else 'unknown'
                 
+                # 提取请求参数（字段类型定义）
+                fields = []
+                parameters = operation.get('parameters', [])
+                for param in parameters:
+                    if param.get('in') == 'body':
+                        schema = param.get('schema', {})
+                        fields = ApiScanner._extract_fields_from_schema(schema, definitions)
+                    elif param.get('in') in ['query', 'path']:
+                        fields.append(ApiScanner._param_to_field(param))
+                
+                # 提取响应字段
+                responses = operation.get('responses', {})
+                response_keys = ApiScanner._extract_response_keys(responses, definitions)
+                
                 api_info = {
                     'module': module.lower(),
                     'method': http_method.upper(),
                     'endpoint': full_path,
                     'description': operation.get('summary', '') or operation.get('description', ''),
-                    'tags': tags
+                    'tags': tags,
+                    'fields': fields,
+                    'response_fields': response_keys
                 }
                 apis.append(api_info)
         
         return apis
+    
+    @staticmethod
+    def _extract_fields_from_schema(schema: Dict, definitions: Dict) -> List[Dict]:
+        """从schema定义中提取字段列表"""
+        fields = []
+        
+        # 处理 $ref 引用
+        ref = schema.get('$ref', '')
+        if ref:
+            ref_name = ref.split('/')[-1]
+            schema = definitions.get(ref_name, {})
+        
+        properties = schema.get('properties', {})
+        required_list = schema.get('required', [])
+        
+        for field_name, field_schema in properties.items():
+            field_type = field_schema.get('type', 'string')
+            field_format = field_schema.get('format', '')
+            
+            # 处理嵌套 $ref
+            if '$ref' in field_schema:
+                field_type = 'object'
+            
+            field = {
+                'name': field_name,
+                'type': field_type,
+                'format': field_format,
+                'required': field_name in required_list,
+                'description': field_schema.get('description', '')
+            }
+            fields.append(field)
+        
+        return fields
+    
+    @staticmethod
+    def _param_to_field(param: Dict) -> Dict:
+        """将Swagger参数转换为字段定义"""
+        return {
+            'name': param.get('name', ''),
+            'type': param.get('type', 'string'),
+            'format': param.get('format', ''),
+            'required': param.get('required', False),
+            'description': param.get('description', ''),
+            'in': param.get('in', '')
+        }
+    
+    @staticmethod
+    def _extract_response_keys(responses: Dict, definitions: Dict) -> List[str]:
+        """从响应定义中提取关键字段"""
+        keys = []
+        for status_code, response in responses.items():
+            if not status_code.startswith('2'):
+                continue
+            
+            schema = response.get('schema', {})
+            if '$ref' in schema:
+                ref_name = schema['$ref'].split('/')[-1]
+                schema = definitions.get(ref_name, {})
+            
+            properties = schema.get('properties', {})
+            keys.extend(list(properties.keys()))
+        
+        # 去重但保持顺序
+        seen = set()
+        return [k for k in keys if not (k in seen or seen.add(k))]
     
     @staticmethod
     def _parse_openapi_v3(spec: Dict) -> List[Dict]:
@@ -322,6 +404,7 @@ class ApiScanner:
         apis = []
         servers = spec.get('servers', [])
         base_path = servers[0].get('url', '') if servers else ''
+        schemas = spec.get('components', {}).get('schemas', {})
         
         for path, path_item in spec.get('paths', {}).items():
             full_path = f"{base_path}{path}"
@@ -333,16 +416,59 @@ class ApiScanner:
                 tags = operation.get('tags', [])
                 module = tags[0] if tags else 'unknown'
                 
+                # 提取请求字段
+                fields = []
+                request_body = operation.get('requestBody', {})
+                content = request_body.get('content', {})
+                json_content = content.get('application/json', {})
+                schema = json_content.get('schema', {})
+                if schema:
+                    fields = ApiScanner._extract_fields_from_schema(schema, schemas)
+                
+                # 也提取 query/path 参数
+                parameters = operation.get('parameters', [])
+                for param in parameters:
+                    if param.get('in') in ['query', 'path']:
+                        fields.append(ApiScanner._param_to_field(param))
+                
+                # 提取响应字段
+                responses = operation.get('responses', {})
+                response_keys = ApiScanner._extract_openapi_response_keys(responses, schemas)
+                
                 api_info = {
                     'module': module.lower(),
                     'method': http_method.upper(),
                     'endpoint': full_path,
                     'description': operation.get('summary', '') or operation.get('description', ''),
-                    'tags': tags
+                    'tags': tags,
+                    'fields': fields,
+                    'response_fields': response_keys
                 }
                 apis.append(api_info)
         
         return apis
+    
+    @staticmethod
+    def _extract_openapi_response_keys(responses: Dict, schemas: Dict) -> List[str]:
+        """从OpenAPI V3响应中提取关键字段"""
+        keys = []
+        for status_code, response in responses.items():
+            if not status_code.startswith('2'):
+                continue
+            
+            content = response.get('content', {})
+            json_content = content.get('application/json', {})
+            schema = json_content.get('schema', {})
+            
+            if '$ref' in schema:
+                ref_name = schema['$ref'].split('/')[-1]
+                schema = schemas.get(ref_name, {})
+            
+            properties = schema.get('properties', {})
+            keys.extend(list(properties.keys()))
+        
+        seen = set()
+        return [k for k in keys if not (k in seen or seen.add(k))]
     
     @staticmethod
     def scan_multiple_sources(sources: List[Dict]) -> List[Dict]:

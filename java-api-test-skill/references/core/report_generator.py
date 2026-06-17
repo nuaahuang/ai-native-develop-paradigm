@@ -62,6 +62,7 @@ class ReportGenerator:
             row = f"""
             <tr>
                 <td>{result.get('test_name', '')}</td>
+                <td><code style="background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px;">{result.get('url', '')}</code></td>
                 <td>{result.get('module', '')}</td>
                 <td>
                     <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; background-color: {color}20; color: {color}; font-weight: 500;">
@@ -134,6 +135,7 @@ class ReportGenerator:
                 <thead>
                     <tr>
                         <th>测试用例</th>
+                        <th>接口URL</th>
                         <th>模块</th>
                         <th>状态</th>
                         <th>耗时</th>

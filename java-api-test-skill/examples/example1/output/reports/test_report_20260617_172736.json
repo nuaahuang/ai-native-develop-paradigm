@@ -1,0 +1,32 @@
+{
+  "timestamp": "2026-06-17T17:27:36",
+  "run_type": "full",
+  "total_tests": 3,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "success_rate": 100.0,
+  "results": [
+    {
+      "test_name": "TestUserApi.test_get_users",
+      "status": "passed",
+      "duration": 0.0,
+      "url": "GET /api/users",
+      "module": "test_user.py"
+    },
+    {
+      "test_name": "TestUserApi.test_create_user",
+      "status": "passed",
+      "duration": 0.0,
+      "url": "POST /api/users",
+      "module": "test_user.py"
+    },
+    {
+      "test_name": "TestUserApi.test_get_user_by_id",
+      "status": "passed",
+      "duration": 0.0,
+      "url": "GET /api/users/{user_id}",
+      "module": "test_user.py"
+    }
+  ]
+}

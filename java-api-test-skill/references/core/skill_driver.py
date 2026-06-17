@@ -3,8 +3,132 @@ import os
 import json
 import subprocess
 import sys
+import re
+import random
 
 from api_scanner import ApiScanner
+
+
+# 类型约定：根据字段类型生成合适的示例值
+_TYPE_SAMPLE_VALUES = {
+    'string': {
+        'default': lambda f: f"test_{f.get('name', 'field')}",
+        'email': lambda f: "test@example.com",
+        'uri': lambda f: "https://example.com",
+        'date': lambda f: "2024-01-01",
+        'date-time': lambda f: "2024-01-01T00:00:00Z",
+        'password': lambda f: "Password123!",
+        'byte': lambda f: "dGVzdA==",
+        'binary': lambda f: "binary_data",
+    },
+    'integer': {'default': lambda f: random.randint(1, 10000)},
+    'int': {'default': lambda f: random.randint(1, 10000)},
+    'long': {'default': lambda f: random.randint(10000, 99999)},
+    'number': {'default': lambda f: round(random.uniform(1.0, 999.99), 2)},
+    'float': {'default': lambda f: round(random.uniform(1.0, 999.99), 2)},
+    'double': {'default': lambda f: round(random.uniform(1.0, 999999.99), 2)},
+    'boolean': {'default': lambda f: True},
+    'bool': {'default': lambda f: True},
+    'array': {'default': lambda f: []},
+    'object': {'default': lambda f: {}},
+}
+
+
+def _generate_sample_value(field):
+    """根据字段类型和格式生成合适的示例值"""
+    field_type = field.get('type', 'string')
+    field_format = field.get('format', '')
+    field_name = field.get('name', 'field')
+    
+    type_map = _TYPE_SAMPLE_VALUES.get(field_type, {})
+    if not type_map:
+        return f"test_{field_name}"
+    
+    # 优先使用 format 匹配
+    if field_format and field_format in type_map:
+        return type_map[field_format](field)
+    
+    return type_map.get('default', lambda f: f"test_{f.get('name', 'field')}")(field)
+
+
+def _generate_payload_from_fields(fields):
+    """根据字段定义生成示例请求体"""
+    payload = {}
+    for field in fields:
+        # 跳过 path 参数
+        if field.get('in') == 'path':
+            continue
+        value = _generate_sample_value(field)
+        payload[field['name']] = value
+    
+    return payload
+
+
+def _build_dependency_chain(test_cases, base_path=''):
+    """分析测试用例的依赖链
+    
+    规则：
+    - POST 方法创建资源 (expected_status=201) → 提供 resource_id
+    - 端点中包含 {id}/{pk}/{key} 等路径参数的 → 依赖 POST 创建测试
+    
+    Returns:
+        list[dict]: 带依赖信息的测试用例列表
+    """
+    dep_configs = []
+    
+    # 先识别提供资源的测试（POST创建类）
+    provider = None
+    for tc in test_cases:
+        method = tc.get('method', '').upper()
+        if method == 'POST' and tc.get('expected_status', 200) == 201:
+            provider = tc.get('endpoint_name', tc['name'])
+            break
+    
+    for tc in test_cases:
+        method = tc.get('method', '').upper()
+        tc_name = tc.get('endpoint_name', tc['name'])
+        
+        # 判断路径是否有路径参数 {id}/{pk}/{key}
+        path = tc.get('path', '')
+        has_path_param = bool(re.search(r'\{(\w+)\}', path + base_path))
+        
+        if method == 'POST' and tc.get('expected_status', 200) == 201:
+            # 创建资源的测试：存储返回的id
+            dep_configs.append({
+                'name': tc_name,
+                'provides': 'resource_id',
+                'depends_on': None,
+            })
+        elif has_path_param and provider:
+            # 需要路径参数的测试：依赖 create 测试
+            dep_configs.append({
+                'name': tc_name,
+                'provides': None,
+                'depends_on': provider,
+                'dep_param': 'resource_id',
+            })
+        elif method == 'PUT' and has_path_param and provider:
+            dep_configs.append({
+                'name': tc_name,
+                'provides': 'updated_id',
+                'depends_on': provider,
+                'dep_param': 'resource_id',
+            })
+        elif method == 'DELETE' and has_path_param and provider:
+            dep_configs.append({
+                'name': tc_name,
+                'provides': None,
+                'depends_on': provider,
+                'dep_param': 'resource_id',
+            })
+        else:
+            dep_configs.append({
+                'name': tc_name,
+                'provides': None,
+                'depends_on': None,
+            })
+    
+    return dep_configs
 
 
 def generate_api_file(module_name: str, base_path: str, endpoints: list):
@@ -55,8 +179,26 @@ class ''' + module_name.title() + '''Api:
     return file_path
 
 
-def generate_test_file(module_name: str, test_cases: list):
-    """生成测试用例文件"""
+def generate_test_file(module_name: str, test_cases: list, base_path: str = ''):
+    """生成测试用例文件（数据类型感知 + 前置依赖链）
+    
+    Args:
+        module_name: 模块名
+        test_cases: 测试用例列表，每个元素可包含：
+            - name: 方法名
+            - method: HTTP方法
+            - endpoint_name: 端点名
+            - expected_status: 预期状态码
+            - expected_keys: 预期响应键
+            - fields: 字段定义列表 [{'name','type','format','required'}]
+            - payload: 手动指定payload（可选，有则不用fields生成）
+            - params: 查询参数（可选）
+            - path: 路径后缀（可选）
+        base_path: API基础路径（用于依赖分析）
+    """
+    class_name = module_name.title() + 'Api'
+    test_class_name = 'Test' + module_name.title() + 'Api'
+    
     content = '''import sys
 import os
 
@@ -65,14 +207,34 @@ if skill_path not in sys.path:
     sys.path.insert(0, skill_path)
 
 from references.core.base_test import BaseTest
-from apis.''' + module_name + '''_api import ''' + module_name.title() + '''Api
+from apis.''' + module_name + '''_api import ''' + class_name + '''
 
 
-class Test''' + module_name.title() + '''Api(BaseTest):
+class ''' + test_class_name + '''(BaseTest):
 
 '''
     
-    for test_case in test_cases:
+    # 构建依赖链
+    dep_configs = _build_dependency_chain(test_cases, base_path)
+    
+    # 收集需要类变量的依赖
+    class_vars = set()
+    for dep in dep_configs:
+        if dep.get('provides'):
+            var_name = '_created_' + dep['provides']
+            class_vars.add(var_name)
+    for dep in dep_configs:
+        if dep.get('dep_param'):
+            var_name = '_created_' + dep['dep_param']
+            class_vars.add(var_name)
+    
+    # 添加类变量（用于依赖共享）
+    if class_vars:
+        for var in sorted(class_vars):
+            content += '    ' + var + ' = None\n'
+        content += '\n'
+    
+    for i, test_case in enumerate(test_cases):
         name = test_case['name']
         desc = test_case.get('description', '测试' + name)
         method = test_case['method'].lower()
@@ -81,26 +243,62 @@ class Test''' + module_name.title() + '''Api(BaseTest):
         expected_keys = test_case.get('expected_keys', [])
         payload = test_case.get('payload')
         params = test_case.get('params')
+        fields = test_case.get('fields', [])
+        dep = dep_configs[i] if i < len(dep_configs) else {}
+        
+        # 依赖注解（注释中标注前置依赖）
+        dep_annotation = ''
+        if dep.get('depends_on'):
+            dep_annotation = ' - 前置: ' + dep['depends_on']
         
         content += '''    def test_''' + name + '''(self):
-        """''' + desc + '''"""
+        """''' + desc + dep_annotation + '''"""
 '''
         
         if method == 'get':
-            if params:
+            # GET 请求：可能有 params，也可能有依赖的路径参数
+            if dep.get('dep_param'):
+                var_name = '_created_' + dep['dep_param']
+                content += '        if not self.__class__.' + var_name + ':\n'
+                content += '            self.skipTest("请先执行前置测试: ' + dep['depends_on'] + '")\n\n'
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + var_name + ')\n'
+            elif params:
                 content += '        params = ' + json.dumps(params) + '\n'
-                content += '        response = ' + module_name.title() + 'Api.' + method + '_' + endpoint_name + '(self.client, params=params)\n'
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, params=params)\n'
             else:
-                content += '        response = ' + module_name.title() + 'Api.' + method + '_' + endpoint_name + '(self.client)\n'
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client)\n'
+        
         elif method in ['post', 'put']:
+            # POST/PUT：使用字段类型生成payload，或使用手动指定的payload
             if payload:
-                content += '        payload = ' + json.dumps(payload, ensure_ascii=False) + '\n'
+                payload_str = json.dumps(payload, indent=8, ensure_ascii=False)
+                content += '        payload = ' + payload_str + '\n'
+            elif fields:
+                auto_payload = _generate_payload_from_fields(fields)
+                payload_str = json.dumps(auto_payload, indent=8, ensure_ascii=False)
+                content += '        # 根据接口数据类型自动生成\n'
+                content += '        payload = ' + payload_str + '\n'
             else:
                 content += '        payload = {\n            # 请求体\n        }\n'
-            content += '        response = ' + module_name.title() + 'Api.' + method + '_' + endpoint_name + '(self.client, payload)\n'
-        elif method == 'delete':
-            content += '        response = ' + module_name.title() + 'Api.' + method + '_' + endpoint_name + '(self.client)\n'
+            
+            if dep.get('dep_param'):
+                var_name = '_created_' + dep['dep_param']
+                content += '        if not self.__class__.' + var_name + ':\n'
+                content += '            self.skipTest("请先执行前置测试: ' + dep['depends_on'] + '")\n\n'
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + var_name + ', payload)\n'
+            else:
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, payload)\n'
         
+        elif method == 'delete':
+            if dep.get('dep_param'):
+                var_name = '_created_' + dep['dep_param']
+                content += '        if not self.__class__.' + var_name + ':\n'
+                content += '            self.skipTest("请先执行前置测试: ' + dep['depends_on'] + '")\n\n'
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + var_name + ')\n'
+            else:
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client)\n'
+        
+        # 状态码断言
         status_method = {
             200: 'ok',
             201: 'created',
@@ -113,8 +311,21 @@ class Test''' + module_name.title() + '''Api(BaseTest):
         
         content += '        self.assert_status_' + status_method + '(response)\n'
         
+        # 响应字段断言 + 存储依赖资源ID
         if expected_keys:
-            content += '        self.assert_response_json(response, ' + str(expected_keys) + ')\n'
+            content += '        data = self.assert_response_json(response, ' + str(expected_keys) + ')\n'
+        else:
+            content += '        data = response.json()\n'
+        
+        # 如果是创建资源的测试，存储返回的ID供后续测试使用
+        if dep.get('provides'):
+            var_name = '_created_' + dep['provides']
+            # 尝试多个可能的ID字段名
+            id_fields = ['id', dep['provides'], dep['provides'].replace('resource_', '')]
+            for idf in id_fields:
+                if idf != dep['provides'].replace('resource_', ''):
+                    pass
+            content += '        self.__class__.' + var_name + ' = data.get("id")\n'
         
         content += '\n'
     
@@ -288,6 +499,7 @@ def main():
     gen_test_parser = subparsers.add_parser('gen-test', help='生成测试用例文件')
     gen_test_parser.add_argument('--module', required=True, help='模块名')
     gen_test_parser.add_argument('--test-cases', required=True, help='测试用例定义JSON')
+    gen_test_parser.add_argument('--base-path', default='', help='API基础路径（用于依赖分析）')
     
     # 运行测试
     run_parser = subparsers.add_parser('run', help='运行测试')
@@ -318,7 +530,7 @@ def main():
     elif args.command == 'gen-test':
         try:
             test_cases = json.loads(args.test_cases)
-            file_path = generate_test_file(args.module, test_cases)
+            file_path = generate_test_file(args.module, test_cases, args.base_path)
             print(json.dumps({'status': 'success', 'file': file_path}))
         except Exception as e:
             print(json.dumps({'status': 'error', 'message': str(e)}))

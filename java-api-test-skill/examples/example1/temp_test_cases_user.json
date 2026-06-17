@@ -1,0 +1,5 @@
+[
+  {"name": "get_users", "method": "GET", "endpoint_name": "users", "description": "测试获取用户列表", "expected_status": 200, "expected_keys": ["data", "total"]},
+  {"name": "create_user", "method": "POST", "endpoint_name": "user", "description": "测试创建用户", "expected_status": 201, "expected_keys": ["id", "username"], "fields": [{"name": "username", "type": "string", "required": true, "description": "用户名"}, {"name": "email", "type": "string", "format": "email", "required": true, "description": "邮箱"}, {"name": "password", "type": "string", "format": "password", "required": true, "description": "密码"}, {"name": "age", "type": "integer", "required": false, "description": "年龄"}]},
+  {"name": "get_user_by_id", "method": "GET", "endpoint_name": "user_by_id", "description": "测试获取单个用户", "expected_status": 200, "expected_keys": ["id", "username"], "path": "/{user_id}"}
+]

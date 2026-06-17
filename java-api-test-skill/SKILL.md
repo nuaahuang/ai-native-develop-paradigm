@@ -1,8 +1,8 @@
 ---
 name: java-api-test
 displayName: Java接口测试自动化工具
-description: 通过扫描Java工程接口，动态生成Python自动化测试脚本，支持交互式授权、全量/增量测试
-version: 1.0.0
+description: 通过扫描Java工程接口，动态生成Python自动化测试脚本，支持交互式授权、全量/增量测试，AI智能分析数据类型并构建前置依赖链
+version: 1.1.0
 author: Deric Huang
 category: 测试工具
 tags: ["接口测试", "自动化测试", "API测试", "Java"]
@@ -16,6 +16,11 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 - **核心框架**：稳定的测试执行引擎，无需频繁修改
 - **接口定义**：独立的接口描述文件，便于增量更新
 - **测试用例**：可动态生成的测试脚本，支持快速扩展
+
+核心能力：
+1. **接口扫描**：支持Java源码和Swagger文档扫描，提取字段类型定义和响应结构
+2. **AI智能分析**：根据接口数据类型自动构建符合规范的请求体，识别接口间的依赖关系
+3. **前置依赖链**：自动生成资源创建→查询→更新→删除的完整测试链路
 
 ## 架构设计
 
@@ -63,6 +68,34 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 | 7 | Python | 执行测试脚本 |
 | 8 | AI | 解析结果并总结 |
 
+### AI智能分析能力
+
+AI在生成测试用例时，会自动完成以下分析：
+
+**1. 数据类型分析**（从scan结果中提取）
+- 解析字段名、类型、格式（如email/password/date）
+- 按类型生成符合规范的示例值（string/int/boolean等）
+- 识别必填字段和可选字段
+
+**2. 前置依赖分析**（接口关系推理）
+- POST 201创建资源 → 自动标记为"资源提供者"
+- 含路径参数 `{id}` 的接口 → 自动关联到创建测试
+- 生成 skipTest 安全回退机制
+
+**AI交互示例**：
+```
+用户："扫描UserController并生成测试"
+AI：扫描到:
+    POST /api/users (字段: username:string, email:email, password:password, age:int)
+    GET  /api/users
+    GET  /api/users/{id}
+    PUT  /api/users/{id}  
+    DELETE /api/users/{id}
+    
+    AI分析：POST创建用户是前置依赖，后续GET/PUT/DELETE需要用户ID
+    是否生成带完整依赖链的测试用例？
+```
+
 ### 交互触发词
 
 | 触发场景 | 示例指令 |
@@ -97,10 +130,10 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 
 ### 扫描方式
 
-| 扫描方式 | 描述 | 支持输入 |
-|----------|------|----------|
-| Java源码扫描 | 解析Controller注解 | Java源码目录或文件 |
-| Swagger文档扫描 | 解析Swagger/OpenAPI规范 | JSON/YAML文件或URL |
+| 扫描方式 | 描述 | 支持输入 | 提取信息 |
+|----------|------|----------|----------|
+| Java源码扫描 | 解析Controller注解 | Java源码目录或文件 | 方法+路径+模块 |
+| Swagger文档扫描 | 解析Swagger/OpenAPI规范 | JSON/YAML文件或URL | 方法+路径+模块+**字段类型**+响应结构 |
 
 ### 变更检测能力
 
@@ -138,9 +171,9 @@ java-api-test-skill/
 
 | 命令 | 说明 | 示例 |
 |------|------|------|
-| `scan` | 扫描接口 | `scan --type java --path /path/to/java` |
+| `scan` | 扫描接口 | `scan --type swagger --path /path/to/swagger.json` |
 | `gen-api` | 生成接口定义 | `gen-api --module user --base-path /api/users` |
-| `gen-test` | 生成测试用例 | `gen-test --module user --test-cases '[{"name":"get_users"}]'` |
+| `gen-test` | 生成测试用例 | `gen-test --module user --base-path /api/users --test-cases '[...]'` |
 | `run` | 运行测试 | `run --include "user" --headers '{"Authorization":"Bearer xxx"}'` |
 | `list` | 列出模块 | `list --type api` |
 
@@ -160,7 +193,7 @@ class [模块名]Api:
         return client.get(f"{cls.BASE_PATH}", params=params)
 ```
 
-### 测试用例格式
+### 测试用例格式（AI生成-数据类型感知）
 
 ```python
 # output/tests/test_[模块名].py
@@ -168,8 +201,28 @@ from core.base_test import BaseTest
 from apis.[模块名]_api import [模块名]Api
 
 class Test[模块名]Api(BaseTest):
-    def test_get_[接口名](self):
-        response = [模块名]Api.get_[接口名](self.client)
+    # AI自动分析出的类变量：用于前置依赖链
+    _created_resource_id = None
+
+    def test_create(self):
+        """测试创建资源"""
+        # AI根据接口字段类型自动生成的payload
+        payload = {
+            "username": "test_username",
+            "email": "test@example.com",
+            "password": "Password123!"
+        }
+        response = [模块名]Api.post_create(self.client, payload)
+        self.assert_status_created(response)
+        data = response.json()
+        # 存储ID供后续测试依赖
+        self.__class__._created_resource_id = data.get("id")
+
+    def test_get_by_id(self):
+        """测试获取单个资源 - 前置: create"""
+        if not self.__class__._created_resource_id:
+            self.skipTest("请先执行前置测试: create")
+        response = [模块名]Api.get_by_id(self.client, self.__class__._created_resource_id)
         self.assert_status_ok(response)
 ```
 
@@ -243,4 +296,5 @@ test:
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| 1.1.0 | 2024-06-17 | 新增AI智能数据类型分析和前置依赖链生成 |
 | 1.0.0 | 2024-01-15 | 初始版本，支持分层架构、交互式授权、增量测试 |

@@ -76,6 +76,7 @@ def run_single_test(test_file, headers=None, base_url=None):
         )
         
         test_results = parse_pytest_output(result.stdout)
+        test_results = enrich_results_with_urls(test_results, test_file)
         for tr in test_results:
             tr['module'] = os.path.basename(test_file)
             results.append(tr)
@@ -150,6 +151,82 @@ def prompt_for_headers():
             print("格式错误，请输入 'Key: Value' 格式")
     
     return headers
+
+
+def _extract_method_url_map(api_file_path):
+    """从API文件中提取方法名到URL的映射"""
+    url_map = {}
+    
+    if not os.path.exists(api_file_path):
+        return url_map
+    
+    with open(api_file_path, 'r') as f:
+        content = f.read()
+    
+    # 提取 BASE_PATH
+    base_path_match = re.search(r'BASE_PATH\s*=\s*["\']([^"\']*)["\']', content)
+    base_path = base_path_match.group(1) if base_path_match else ''
+    
+    # 提取方法 -> (http_method, url_suffix)
+    pattern = re.compile(
+        r'def\s+(\w+)_(\w+)\(cls.*?\).*?return\s+client\.(\w+)\(f?"\{cls\.BASE_PATH\}([^"]*)"',
+        re.DOTALL
+    )
+    
+    for match in pattern.finditer(content):
+        http_verb = match.group(3).upper()
+        url_suffix = match.group(4)
+        method_name = f"{match.group(1)}_{match.group(2)}"
+        full_url = f"{base_path}{url_suffix}"
+        url_map[method_name] = f"{http_verb} {full_url}"
+    
+    return url_map
+
+
+def enrich_results_with_urls(results, test_file):
+    """为测试结果添加URL信息"""
+    if not os.path.exists(test_file):
+        return results
+    
+    with open(test_file, 'r') as f:
+        content = f.read()
+    
+    # 找到导入的API模块
+    api_import_match = re.search(r'from apis\.(\w+)_api import (\w+)', content)
+    if not api_import_match:
+        return results
+    
+    module_name = api_import_match.group(1)
+    api_class_name = api_import_match.group(2)
+    # test_file = {cwd}/output/tests/test_user.py
+    # project_root = {cwd} (需要向上三级)
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(test_file)))
+    api_file = os.path.join(project_root, 'apis', f'{module_name}_api.py')
+    
+    method_url_map = _extract_method_url_map(api_file)
+    
+    for result in results:
+        # 从测试方法名解析: TestUserApi.test_get_users → get_users
+        test_method_match = re.search(r'\.test_(\w+)$', result['test_name'])
+        if not test_method_match:
+            continue
+        
+        test_method = test_method_match.group(1)
+        
+        # 先在测试文件中查找实际的API调用
+        # 匹配 test_get_users 方法体中调用的 api_method
+        api_call_pattern = re.compile(
+            r'def test_' + re.escape(test_method) + r'\(self\).*?' +
+            re.escape(api_class_name) + r'\.(\w+)\(self\.client',
+            re.DOTALL
+        )
+        api_call_match = api_call_pattern.search(content)
+        
+        if api_call_match:
+            api_method = api_call_match.group(1)
+            result['url'] = method_url_map.get(api_method, '')
+    
+    return results
 
 
 def parse_pytest_output(output):
