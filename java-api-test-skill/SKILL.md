@@ -40,16 +40,16 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 └── api_test_config.yaml     # 配置文件 (# 可修改)
 
 java-api-test-skill/
-├── SKILL.md              # 技能说明 (# fixed)
-├── scripts/             # 可执行脚本 (# fixed)
-│   └── core/
-│       ├── api_scanner.py     # 接口扫描器（含安全检查）
-│       ├── base_test.py       # 测试基类（断言工具）
-│       ├── http_client.py     # HTTP客户端（含域名安全验证）
-│       ├── report_generator.py  # HTML/JSON报告生成
-│       ├── run_tests.py      # 多线程测试执行器
-│       └── skill_driver.py  # Skill驱动入口（命令路由）
-└── references/           # 参考文档和模板 (# fixed)
+├── SKILL.md              # 技能说明
+├── scripts/             # 可执行脚本
+│   ├── __init__.py
+│   ├── api_scanner.py     # 接口扫描器（含安全检查）
+│   ├── base_test.py       # 测试基类（断言工具）
+│   ├── http_client.py     # HTTP客户端（含域名安全验证）
+│   ├── report_generator.py  # HTML/JSON报告生成
+│   ├── run_tests.py      # 多线程测试执行器
+│   └── skill_driver.py  # Skill驱动入口（命令路由）
+└── references/           # 参考文档和模板
     └── templates/
         ├── config.yaml      # 配置模板
         └── test_case.j2     # 测试用例模板
