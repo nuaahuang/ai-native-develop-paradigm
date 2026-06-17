@@ -1,7 +1,23 @@
 import requests
 import os
 import json
+import urllib.parse
 from typing import Optional, Dict, Any
+
+# 允许的网络范围（根据企业安全策略调整）
+# 允许: localhost/127.0.0.1、内网IP、常见企业域名后缀
+ALLOWED_DOMAINS = {
+    'localhost', '127.0.0.1', '0.0.0.0',
+    'internal', 'local', 'intranet',
+}
+
+# 禁止的敏感网络目标
+FORBIDDEN_PATTERNS = [
+    'metadata', 'aws', 'alibaba', 'tencent', 'cloud',
+    '169.254.',  # cloud metadata
+    '100.',  # internal cloud networking
+    'kubernetes', 'k8s', 'docker', 'container',
+]
 
 
 class HttpClient:
@@ -9,7 +25,27 @@ class HttpClient:
         self.base_url = base_url.rstrip('/')
         self.timeout = timeout
         self.session = requests.Session()
+        self._validate_base_url(base_url)
         self._setup_default_headers(headers or {})
+    
+    def _validate_base_url(self, base_url: str):
+        """验证base_url是否在允许范围内"""
+        parsed = urllib.parse.urlparse(base_url)
+        host = parsed.netloc.split(':')[0].lower()
+        
+        # 检查是否包含禁止模式
+        for pattern in FORBIDDEN_PATTERNS:
+            if pattern in host:
+                raise ValueError(f"目标域名 '{host}' 包含禁止模式 '{pattern}'，不允许访问")
+        
+        # 检查localhost/内网，这是安全的（用户自己的测试环境）
+        # 如果需要严格限制，可以在这里添加企业域名白名单检查
+        # 本Skill定位是测试工具，允许用户测试自己的内网服务
+        
+        # 禁止HTTP明文（可选）
+        if parsed.scheme == 'http' and not host in ['localhost', '127.0.0.1', '0.0.0.0']:
+            # 只允许本地HTTP，外部必须HTTPS
+            raise ValueError("外部非本地服务必须使用HTTPS协议，禁止HTTP明文传输")
     
     def _setup_default_headers(self, custom_headers: Dict):
         headers = {

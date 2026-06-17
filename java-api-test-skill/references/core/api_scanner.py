@@ -7,6 +7,44 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 
+def _sanitize_scan_path(scan_path: str) -> str:
+    """安全检查扫描路径，限制只能在当前工作目录内扫描
+    
+    Args:
+        scan_path: 用户提供的扫描路径
+        
+    Returns:
+        规范化后的绝对路径
+        
+    Raises:
+        ValueError: 如果路径超出工作目录范围或包含敏感模式
+    """
+    cwd = os.path.abspath(os.getcwd())
+    abs_path = os.path.abspath(os.path.expanduser(scan_path))
+    
+    # 检查是否在当前工作目录内
+    if not abs_path.startswith(cwd):
+        raise ValueError(
+            f"扫描路径 '{abs_path}' 超出当前工作目录 '{cwd}'\n"
+            "安全限制：只能扫描当前工作目录范围内的文件"
+        )
+    
+    # 禁止扫描敏感目录
+    forbidden_patterns = [
+        '/etc/', '/root/', '/home/', '/var/', '/usr/',
+        '.ssh', '.git', '.config', '.aws', '.docker',
+        'id_rsa', 'id_dsa', 'authorized_keys',
+        'password', 'secret', 'token', 'key',
+    ]
+    for pattern in forbidden_patterns:
+        if pattern in abs_path.lower():
+            raise ValueError(
+                f"扫描路径 '{abs_path}' 包含敏感目录/文件名 '{pattern}'，禁止扫描"
+            )
+    
+    return abs_path
+
+
 class ApiScanner:
     """接口扫描器，支持多种扫描方式和变更检测"""
     
@@ -150,6 +188,9 @@ class ApiScanner:
         Returns:
             接口定义列表
         """
+        # 安全检查：限制只能在当前工作目录内扫描
+        source_path = _sanitize_scan_path(source_path)
+        
         apis = []
         
         if os.path.isfile(source_path):
@@ -251,6 +292,10 @@ class ApiScanner:
             接口定义列表
         """
         apis = []
+        
+        if not (swagger_path.startswith('http://') or swagger_path.startswith('https://')):
+            # 本地文件需要安全检查
+            swagger_path = _sanitize_scan_path(swagger_path)
         
         if swagger_path.startswith('http://') or swagger_path.startswith('https://'):
             try:
