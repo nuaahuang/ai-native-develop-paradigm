@@ -65,68 +65,115 @@ def _generate_payload_from_fields(fields):
 
 
 def _build_dependency_chain(test_cases, base_path=''):
-    """分析测试用例的依赖链
+    """智能构建前置依赖链：匹配输入参数 ↔ 响应字段
     
-    规则：
-    - POST 方法创建资源 (expected_status=201) → 提供 resource_id
-    - 端点中包含 {id}/{pk}/{key} 等路径参数的 → 依赖 POST 创建测试
+    对每个接口，提取其"输入需求"（路径参数/查询参数/请求体字段），
+    与其他接口的"响应提供"（响应字段）做交叉匹配，构建数据流链。
+    
+    例如：
+      POST /users → 响应 {id, username, email}
+      GET /users/{user_id} → 需要 user_id ← 匹配到 POST 的 id
+      POST /orders {user_id} → 需要 user_id ← 匹配到 POST 的 id
     
     Returns:
-        list[dict]: 带依赖信息的测试用例列表
+        list[dict]: 每个元素包含:
+            - name: 用例名
+            - needs: set[str] 需要的外部输入
+            - provides: set[str] 能提供的响应字段
+            - depends_on: dict[str, str] {需要参数 → 提供该参数的测试名}
     """
+    # Step 1: 提取每个测试用例的"需求"和"供给"
+    test_info = []
+    for tc in test_cases:
+        tc_name = tc.get('endpoint_name', tc['name'])
+        method = tc.get('method', '').upper()
+        expected_status = tc.get('expected_status', 200)
+        
+        # 提取输入的参数名
+        # - 路径参数: 外部依赖（需要从其他API获取）
+        # - 查询参数: 外部依赖（需要从其他API获取）
+        # - 请求体字段: 仅 _id 结尾的引用字段才作为外部依赖
+        needs = set()
+        path = tc.get('path', '')
+        path_params = re.findall(r'\{(\w+)\}', path + base_path)
+        needs.update(p.lower() for p in path_params)
+        
+        params = tc.get('params', {})
+        if params:
+            needs.update(k.lower() for k in params.keys())
+        
+        fields = tc.get('fields', [])
+        if fields:
+            for f in fields:
+                fn = f.get('name', '').lower()
+                # 只有引用字段（_id结尾）才作为外部依赖
+                if fn.endswith('_id') or fn.endswith('_ids'):
+                    needs.add(fn)
+        
+        # 提取响应的字段名（从 expected_keys + 自动推理）
+        provides = set()
+        for key in tc.get('expected_keys', []):
+            provides.add(key.lower())
+        
+        # POST 201 自动提供 id
+        if method == 'POST' and expected_status == 201:
+            provides.add('id')
+        
+        # 如果路径有 {id}，且方法不是 POST，说明消费资源
+        is_consumer = bool(path_params) and method != 'POST'
+        
+        test_info.append({
+            'name': tc_name,
+            'needs': needs,
+            'provides': provides,
+            'method': method,
+            'expected_status': expected_status,
+            'path_params': [p.lower() for p in path_params],
+        })
+    
+    # Step 2: 交叉匹配构建依赖图
+    # 匹配规则：测试B的"需求" ↔ 测试A的"供给"
+    # - 精确匹配: 参数名 == 字段名
+    # - 后缀匹配: user_id → id (如果 user_id 没精确匹配到，但 A 提供了 id)
     dep_configs = []
     
-    # 先识别提供资源的测试（POST创建类）
-    provider = None
-    for tc in test_cases:
-        method = tc.get('method', '').upper()
-        if method == 'POST' and tc.get('expected_status', 200) == 201:
-            provider = tc.get('endpoint_name', tc['name'])
-            break
-    
-    for tc in test_cases:
-        method = tc.get('method', '').upper()
-        tc_name = tc.get('endpoint_name', tc['name'])
+    for i, info in enumerate(test_info):
+        dep = {
+            'name': info['name'],
+            'needs': info['needs'],
+            'provides': info['provides'],
+            'depends_on': {},       # {参数名: 提供该参数的测试名}
+            'dep_mapping': {},      # {参数名: 存储变量名}
+        }
         
-        # 判断路径是否有路径参数 {id}/{pk}/{key}
-        path = tc.get('path', '')
-        has_path_param = bool(re.search(r'\{(\w+)\}', path + base_path))
+        for need in info['needs']:
+            # 精确匹配（只向前查找，防止循环依赖）
+            matched = None
+            for j, other in enumerate(test_info):
+                if j >= i:  # 只能依赖排在前面的测试
+                    break
+                if need in other['provides']:
+                    matched = (other['name'], need)
+                    break
+            
+            # 后缀匹配: xxx_id → id, xxx_name → name（只向前查找）
+            if not matched:
+                for j, other in enumerate(test_info):
+                    if j >= i:
+                        break
+                    for provide in other['provides']:
+                        if need.endswith('_' + provide) or need.endswith(provide):
+                            matched = (other['name'], provide)
+                            break
+                    if matched:
+                        break
+            
+            if matched:
+                provider_name, provide_key = matched
+                dep['depends_on'][need] = provider_name
+                dep['dep_mapping'][need] = '_stored__' + provider_name + '__' + provide_key
         
-        if method == 'POST' and tc.get('expected_status', 200) == 201:
-            # 创建资源的测试：存储返回的id
-            dep_configs.append({
-                'name': tc_name,
-                'provides': 'resource_id',
-                'depends_on': None,
-            })
-        elif has_path_param and provider:
-            # 需要路径参数的测试：依赖 create 测试
-            dep_configs.append({
-                'name': tc_name,
-                'provides': None,
-                'depends_on': provider,
-                'dep_param': 'resource_id',
-            })
-        elif method == 'PUT' and has_path_param and provider:
-            dep_configs.append({
-                'name': tc_name,
-                'provides': 'updated_id',
-                'depends_on': provider,
-                'dep_param': 'resource_id',
-            })
-        elif method == 'DELETE' and has_path_param and provider:
-            dep_configs.append({
-                'name': tc_name,
-                'provides': None,
-                'depends_on': provider,
-                'dep_param': 'resource_id',
-            })
-        else:
-            dep_configs.append({
-                'name': tc_name,
-                'provides': None,
-                'depends_on': None,
-            })
+        dep_configs.append(dep)
     
     return dep_configs
 
@@ -217,21 +264,23 @@ class ''' + test_class_name + '''(BaseTest):
     # 构建依赖链
     dep_configs = _build_dependency_chain(test_cases, base_path)
     
-    # 收集需要类变量的依赖
-    class_vars = set()
+    # 收集所有需要存储到类变量的字段
+    # 格式: {变量名 → 提供该值的测试名.字段名 注释}
+    all_store_vars = {}
     for dep in dep_configs:
-        if dep.get('provides'):
-            var_name = '_created_' + dep['provides']
-            class_vars.add(var_name)
-    for dep in dep_configs:
-        if dep.get('dep_param'):
-            var_name = '_created_' + dep['dep_param']
-            class_vars.add(var_name)
+        # 提供者：需要存储响应字段
+        for provide_field in dep.get('provides', set()):
+            var_name = '_stored__' + dep['name'] + '__' + provide_field
+            all_store_vars[var_name] = (dep['name'], provide_field)
+        
+        # 消费者：依赖的变量也需要声明
+        for need, mapping_var in dep.get('dep_mapping', {}).items():
+            all_store_vars[mapping_var] = (mapping_var, '')
     
-    # 添加类变量（用于依赖共享）
-    if class_vars:
-        for var in sorted(class_vars):
-            content += '    ' + var + ' = None\n'
+    # 添加类变量声明（所有存储变量初始化为 None）
+    if all_store_vars:
+        for var_name in sorted(all_store_vars.keys()):
+            content += '    ' + var_name + ' = None\n'
         content += '\n'
     
     for i, test_case in enumerate(test_cases):
@@ -246,30 +295,81 @@ class ''' + test_class_name + '''(BaseTest):
         fields = test_case.get('fields', [])
         dep = dep_configs[i] if i < len(dep_configs) else {}
         
-        # 依赖注解（注释中标注前置依赖）
+        # 依赖注解（标注数据从哪个测试来）
         dep_annotation = ''
         if dep.get('depends_on'):
-            dep_annotation = ' - 前置: ' + dep['depends_on']
+            providers = sorted(set(dep['depends_on'].values()))
+            dep_annotation = ' - 数据源: ' + ', '.join(providers)
         
         content += '''    def test_''' + name + '''(self):
         """''' + desc + dep_annotation + '''"""
 '''
         
+        # 依赖检查：所有前置依赖的值必须存在
+        if dep.get('dep_mapping'):
+            all_providers = sorted(set(dep['dep_mapping'].values()))
+            provider_names = sorted(set(dep['depends_on'].values()))
+            for provider_name in provider_names:
+                # 找这个提供者的所有依赖变量
+                provider_vars = []
+                for need, mapping_var in dep['dep_mapping'].items():
+                    if dep['depends_on'].get(need) == provider_name:
+                        provider_vars.append(mapping_var)
+                
+                # 生成 skip 检查
+                check_conditions = []
+                for mapping_var in provider_vars:
+                    check_conditions.append('not self.__class__.' + mapping_var)
+                if check_conditions:
+                    condition_str = ' or '.join(check_conditions)
+                    content += '        if ' + condition_str + ':\n'
+                    content += '            self.skipTest("请先执行前置测试: ' + provider_name + '")\n'
+                content += '\n'
+        
+        # 构建 API 调用参数
+        # 确定需要从存储变量中作为参数传递给 API 调用的值
+        call_kwargs = []
+        path_arg = None  # 路径参数的实参
+        
+        # 检查路径参数
+        path = test_case.get('path', '')
+        path_params = re.findall(r'\{(\w+)\}', path + base_path)
+        if path_params:
+            first_path_param = path_params[0].lower()
+            if first_path_param in dep.get('dep_mapping', {}):
+                path_arg = dep['dep_mapping'][first_path_param]
+        
+        # 检查查询参数 - 如果有依赖则在方法内构建
+        has_param_deps = False
+        if params:
+            for param_key in params:
+                param_lower = param_key.lower()
+                if param_lower in dep.get('dep_mapping', {}):
+                    has_param_deps = True
+            
+        # GET 请求
         if method == 'get':
-            # GET 请求：可能有 params，也可能有依赖的路径参数
-            if dep.get('dep_param'):
-                var_name = '_created_' + dep['dep_param']
-                content += '        if not self.__class__.' + var_name + ':\n'
-                content += '            self.skipTest("请先执行前置测试: ' + dep['depends_on'] + '")\n\n'
-                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + var_name + ')\n'
+            if path_arg:
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + path_arg + ')\n'
+            elif has_param_deps:
+                content += '        params = {\n'
+                for param_key, param_val in params.items():
+                    param_lower = param_key.lower()
+                    if param_lower in dep.get('dep_mapping', {}):
+                        content += '            "' + param_key + '": self.__class__.' + dep['dep_mapping'][param_lower] + ',\n'
+                    else:
+                        content += '            "' + param_key + '": ' + json.dumps(param_val) + ',\n'
+                content += '        }\n'
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, params=params)\n'
             elif params:
                 content += '        params = ' + json.dumps(params) + '\n'
                 content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, params=params)\n'
             else:
                 content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client)\n'
         
+        # POST/PUT 请求
         elif method in ['post', 'put']:
-            # POST/PUT：使用字段类型生成payload，或使用手动指定的payload
+            # 构建 payload
             if payload:
                 payload_str = json.dumps(payload, indent=8, ensure_ascii=False)
                 content += '        payload = ' + payload_str + '\n'
@@ -281,20 +381,34 @@ class ''' + test_class_name + '''(BaseTest):
             else:
                 content += '        payload = {\n            # 请求体\n        }\n'
             
-            if dep.get('dep_param'):
-                var_name = '_created_' + dep['dep_param']
-                content += '        if not self.__class__.' + var_name + ':\n'
-                content += '            self.skipTest("请先执行前置测试: ' + dep['depends_on'] + '")\n\n'
-                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + var_name + ', payload)\n'
+            # 检查 payload 中是否有字段需要从依赖获取
+            payload_has_deps = False
+            if fields:
+                for field in fields:
+                    field_name = field.get('name', '').lower()
+                    if field_name in dep.get('dep_mapping', {}):
+                        payload_has_deps = True
+                        break
+            
+            if payload_has_deps:
+                # 用依赖值覆盖 payload 中的对应字段
+                content += '        # 用前置依赖数据覆盖 payload\n'
+                for field in fields:
+                    field_name = field.get('name', '').lower()
+                    if field_name in dep.get('dep_mapping', {}):
+                        mapping_var = dep['dep_mapping'][field_name]
+                        content += '        payload["' + field.get('name', '') + '"] = self.__class__.' + mapping_var + '\n'
+                content += '\n'
+            
+            if path_arg:
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + path_arg + ', payload)\n'
             else:
                 content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, payload)\n'
         
+        # DELETE 请求
         elif method == 'delete':
-            if dep.get('dep_param'):
-                var_name = '_created_' + dep['dep_param']
-                content += '        if not self.__class__.' + var_name + ':\n'
-                content += '            self.skipTest("请先执行前置测试: ' + dep['depends_on'] + '")\n\n'
-                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + var_name + ')\n'
+            if path_arg:
+                content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client, self.__class__.' + path_arg + ')\n'
             else:
                 content += '        response = ' + class_name + '.' + method + '_' + endpoint_name + '(self.client)\n'
         
@@ -311,21 +425,19 @@ class ''' + test_class_name + '''(BaseTest):
         
         content += '        self.assert_status_' + status_method + '(response)\n'
         
-        # 响应字段断言 + 存储依赖资源ID
+        # 响应字段断言
         if expected_keys:
             content += '        data = self.assert_response_json(response, ' + str(expected_keys) + ')\n'
         else:
             content += '        data = response.json()\n'
         
-        # 如果是创建资源的测试，存储返回的ID供后续测试使用
-        if dep.get('provides'):
-            var_name = '_created_' + dep['provides']
-            # 尝试多个可能的ID字段名
-            id_fields = ['id', dep['provides'], dep['provides'].replace('resource_', '')]
-            for idf in id_fields:
-                if idf != dep['provides'].replace('resource_', ''):
-                    pass
-            content += '        self.__class__.' + var_name + ' = data.get("id")\n'
+        # 存储该测试能提供的所有响应值（供后续测试依赖）
+        for provide_field in sorted(dep.get('provides', set())):
+            if provide_field == 'id' and provide_field not in test_case.get('expected_keys', []):
+                # id 是自动推理的，用 data.get("id")
+                content += '        self.__class__._stored__' + dep['name'] + '__id = data.get("id")\n'
+            elif provide_field in [k.lower() for k in expected_keys]:
+                content += '        self.__class__._stored__' + dep['name'] + '__' + provide_field + ' = data.get("' + provide_field + '")\n'
         
         content += '\n'
     
