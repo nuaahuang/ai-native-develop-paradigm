@@ -1,7 +1,7 @@
 ---
 name: java-api-test
 displayName: Java接口测试自动化工具
-description: 通过扫描Java工程接口，动态生成Python自动化测试脚本，支持交互式授权、全量/增量测试，AI智能分析数据类型并构建前置依赖链
+description: 通过扫描Java工程接口，动态生成Python自动化测试脚本，支持交互式授权、全量/增量测试。采用分层架构设计，核心框架稳定不变，接口定义和测试用例可动态生成。适用于Java后端项目的接口自动化测试回归验证。
 version: 1.3.0
 author: Deric Huang
 category: 测试工具
@@ -13,293 +13,95 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 ## 概述
 
 基于AI驱动的Java接口测试自动化工具，采用**分层架构设计**：
-- **核心框架**：稳定的测试执行引擎，无需频繁修改
-- **接口定义**：独立的接口描述文件，便于增量更新
-- **测试用例**：可动态生成的测试脚本，支持快速扩展
+- **核心框架**：`references/core/`，稳定不变，包含扫描器、HTTP客户端、测试执行器、报告生成器
+- **接口定义**：`apis/`，动态生成，每个模块一个文件，便于增量更新
+- **测试用例**：`output/tests/`，动态生成，AI根据依赖关系自动编排测试链
 
 核心能力：
-1. **接口扫描**：支持Java源码和Swagger文档扫描，提取字段类型定义和响应结构
-2. **AI智能分析**：根据接口数据类型自动构建符合规范的请求体，识别接口间的依赖关系
-3. **前置依赖链**：自动生成资源创建→查询→更新→删除的完整测试链路
+1. **接口扫描**：Java源码扫描(`src/`)和Swagger文档扫描(`swagger/`)，提取字段类型定义和响应结构
+2. **AI智能分析**：根据接口数据类型自动构建符合规范的请求体，识别接口间依赖关系
+3. **前置依赖链**：自动编排创建→查询→更新→删除的完整数据流测试链路
+4. **灵活执行**：支持全量测试、指定模块测试、增量测试（仅测试新增/修改接口）
 
-## 架构设计
+## 核心架构
 
-### 分层架构
+### 分层结构（本地项目运行时）
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    分层架构                          │
-├─────────────────────────────────────────────────────┤
-│  references/core/     # 核心框架（固定不变）          │
-│    ├── api_scanner.py     # 接口扫描器               │
-│    ├── base_test.py       # 测试基类                 │
-│    ├── http_client.py     # HTTP客户端               │
-│    └── report_generator.py # 报告生成器             │
-├─────────────────────────────────────────────────────┤
-│  apis/                # 接口定义（动态生成）          │
-│    └── [模块名]_api.py     # 接口文件（AI生成）      │
-├─────────────────────────────────────────────────────┤
-│  output/tests/        # 测试用例（动态生成）          │
-│    └── test_[模块名].py    # 测试文件（AI生成）      │
-└─────────────────────────────────────────────────────┘
+{your-project}/
+├── apis/                    # 动态生成：接口定义文件 (# 动态生成)
+│   └── user_api.py
+├── output/
+│   ├── tests/               # 动态生成：测试用例文件 (# 动态生成)
+│   │   └── test_user.py
+│   └── reports/            # 输出：测试报告 (# 输出)
+└── api_test_config.yaml     # 配置文件 (# 可修改)
+
+java-api-test-skill/
+└── references/             # Skill核心框架 (# 固定，不变)
+    └── core/
+        ├── api_scanner.py     # 接口扫描器（含安全检查）
+        ├── base_test.py       # 测试基类（断言工具）
+        ├── http_client.py     # HTTP客户端（含域名安全验证）
+        ├── report_generator.py  # HTML/JSON报告生成
+        ├── run_tests.py      # 多线程测试执行器
+        └── skill_driver.py  # Skill驱动入口（命令路由）
 ```
 
-### 文件类型标识规范
+### 文件类型说明
 
-| 标识 | 含义 | 示例 |
+| 标识 | 位置 | 说明 |
 |------|------|------|
-| `# 固定` | 核心框架代码，稳定后无需修改 | `core/base_test.py` |
-| `# 可修改` | 配置文件和模板，可按需调整 | `config.yaml` |
-| `# 动态生成` | AI生成的代码，运行时创建 | `apis/user_api.py` |
-| `# 参考用` | 示例代码，供AI参考学习 | `examples/mock_server.py` |
+| **固定** | `references/core/` | 核心框架代码，稳定后无需修改 |
+| **可修改** | `api_test_config.yaml` | 用户配置文件，可按需调整 |
+| **动态生成** | `apis/` `output/tests/` | AI生成的接口定义和测试用例 |
+| **输出** | `output/reports/` | HTML + JSON 测试报告 |
 
-## 核心工作流程
+## 核心工作流程（AI Skill驱动）
 
-**Skill作为AI交互入口，驱动整个测试流程**：
+| 步骤 | AI角色 | Python执行 |
+|------|---------|----------|
+| 1 | 用户触发Skill | - |
+| 2 | AI理解意图，引导用户输入扫描路径 | - |
+| 3 | AI调用 `skill_driver.py scan` | 扫描接口，提取字段类型+响应结构 |
+| 4 | AI智能分析：识别数据类型+依赖关系 | - |
+| 5 | AI展示分析结果，确认测试范围 | 用户确认 |
+| 6 | AI调用 `skill_driver.py gen-api` | 生成 `apis/{module}_api.py` |
+| 7 | AI调用 `skill_driver.py gen-test` | 生成 `output/tests/test_{module}.py`（带依赖链） |
+| 8 | AI展示目标URL+掩码Headers | 用户确认执行 |
+| 9 | AI调用 `skill_driver.py run` | 执行测试，生成HTML+JSON报告 |
+| 10 | AI总结结果，展示报告链接 | - |
 
-| 步骤 | 执行者 | 描述 |
-|------|--------|------|
-| 1 | 用户 | 触发Skill |
-| 2 | AI | 理解意图并引导 |
-| 3 | AI | 生成接口定义 |
-| 4 | AI | 生成测试用例 |
-| 5 | AI | 获取运行参数 |
-| 6 | AI | 调用Python执行器 |
-| 7 | Python | 执行测试脚本 |
-| 8 | AI | 解析结果并总结 |
+## AI智能分析能力
 
-### AI智能分析能力
+**1. 数据类型感知**（从扫描结果提取）
+- 根据 `type`/`format` 生成符合规范的示例值
+  - `string` → `"test_field"`
+  - `string + email` → `"test@example.com"`
+  - `string + password` → `"Password123!"`
+  - `integer` → 随机整数
+  - `boolean` → `true`
 
-AI在生成测试用例时，会自动完成以下分析：
-
-**1. 数据类型分析**（从scan结果中提取）
-- 解析字段名、类型、格式（如email/password/date）
-- 按类型生成符合规范的示例值（string/int/boolean等）
-- 识别必填字段和可选字段
-
-**2. 前置依赖分析**（接口关系推理）
-- POST 201创建资源 → 自动标记为"资源提供者"
-- 含路径参数 `{id}` 的接口 → 自动关联到创建测试
-- 生成 skipTest 安全回退机制
-
-**AI交互示例**：
-```
-用户："扫描UserController并生成测试"
-AI：扫描到:
-    POST /api/users (字段: username:string, email:email, password:password, age:int)
-    GET  /api/users
-    GET  /api/users/{id}
-    PUT  /api/users/{id}  
-    DELETE /api/users/{id}
-    
-    AI分析：POST创建用户是前置依赖，后续GET/PUT/DELETE需要用户ID
-    是否生成带完整依赖链的测试用例？
-```
-
-### 交互触发词
-
-| 触发场景 | 示例指令 |
-|----------|----------|
-| 扫描接口 | "扫描Java工程接口"、"分析Controller代码" |
-| 生成测试 | "生成用户模块测试"、"创建订单接口测试" |
-| 运行测试 | "运行所有测试"、"测试用户接口" |
-| 增量测试 | "检测新增接口并测试"、"只测试新API" |
-| 配置授权 | "设置Authorization header" |
+**2. 依赖链自动编排**（数据流传递）
+- 对每个接口提取输入需求：路径参数/查询参数/请求体中的 `xxx_id`
+- 对每个接口提取输出供给：响应字段列表（POST 201自动添加 `id`）
+- 交叉匹配：**输入需求 ← 上游输出供给**，只向前匹配防循环
+- 生成 skipTest 安全回退：前置未执行则自动跳过
 
 ## 支持的运行模式
 
-| 模式 | 描述 | 适用场景 |
+| 模式 | 说明 | 适用场景 |
 |------|------|----------|
 | 全量运行 | 执行所有测试用例 | 回归测试、发布前验证 |
 | 指定接口 | 按模块/名称正则匹配 | 开发调试、单模块验证 |
 | 增量运行 | 仅测试新增/修改的接口 | CI流水线、日常开发 |
 
-## Header配置机制
-
-支持灵活的HTTP Header配置：
-
-| 配置方式 | 说明 | 示例 |
-|----------|------|------|
-| 命令行参数 | `--header` 指定 | `--header Authorization "Bearer xxx"` |
-| 交互式输入 | `--prompt-headers` | 按提示输入key-value对 |
-| 环境变量 | `API_HEADERS`（JSON） | `API_HEADERS='{"Authorization":"Bearer xxx"}'` |
-
-**优先级**：命令行参数 > 交互式输入 > 环境变量
-
-## 接口扫描支持
-
-### 扫描方式
-
-| 扫描方式 | 描述 | 支持输入 | 提取信息 |
-|----------|------|----------|----------|
-| Java源码扫描 | 解析Controller注解 | Java源码目录或文件 | 方法+路径+模块 |
-| Swagger文档扫描 | 解析Swagger/OpenAPI规范 | JSON/YAML文件或URL | 方法+路径+模块+**字段类型**+响应结构 |
-
-### 变更检测能力
-
-| 变更类型 | 描述 |
-|----------|------|
-| 新增 | 新增的接口 |
-| 删除 | 删除的接口 |
-| 修改 | 修改的接口 |
-| 未变化 | 未变化的接口 |
-
-## 目录结构
-
-```
-java-api-test-skill/
-├── SKILL.md                 # 技能描述文档
-├── examples/                # 演示示例项目
-│   └── example1/            # 完整演示流程
-└── references/              # 核心框架代码
-    ├── core/                # 核心工具
-    │   ├── api_scanner.py   # 接口扫描器
-    │   ├── base_test.py     # 测试基类
-    │   ├── http_client.py   # HTTP客户端
-    │   ├── report_generator.py  # 报告生成器
-    │   ├── run_tests.py     # 测试执行器
-    │   └── skill_driver.py  # Skill驱动接口
-    └── templates/           # 模板文件
-        ├── config.yaml      # 配置模板
-        ├── test_case.j2     # 测试用例模板
-        └── apis/            # 接口定义模板
-```
-
-### Skill驱动接口
-
-**skill_driver.py** 提供以下命令：
-
-| 命令 | 说明 | 示例 |
-|------|------|------|
-| `scan` | 扫描接口 | `scan --type swagger --path /path/to/swagger.json` |
-| `gen-api` | 生成接口定义 | `gen-api --module user --base-path /api/users` |
-| `gen-test` | 生成测试用例 | `gen-test --module user --base-path /api/users --test-cases '[...]'` |
-| `run` | 运行测试 | `run --include "user" --headers '{"Authorization":"Bearer xxx"}'` |
-| `list` | 列出模块 | `list --type api` |
-
-## 输入输出规范
-
-### 接口定义格式
-
-```python
-# apis/[模块名]_api.py
-from core.http_client import HttpClient
-
-class [模块名]Api:
-    BASE_PATH = "/api/[模块名]"
-    
-    @classmethod
-    def get_[接口名](cls, client: HttpClient, params=None):
-        return client.get(f"{cls.BASE_PATH}", params=params)
-```
-
-### 测试用例格式（AI生成-数据类型感知）
-
-```python
-# output/tests/test_[模块名].py
-from core.base_test import BaseTest
-from apis.[模块名]_api import [模块名]Api
-
-class Test[模块名]Api(BaseTest):
-    # AI自动分析出的类变量：用于前置依赖链
-    _created_resource_id = None
-
-    def test_create(self):
-        """测试创建资源"""
-        # AI根据接口字段类型自动生成的payload
-        payload = {
-            "username": "test_username",
-            "email": "test@example.com",
-            "password": "Password123!"
-        }
-        response = [模块名]Api.post_create(self.client, payload)
-        self.assert_status_created(response)
-        data = response.json()
-        # 存储ID供后续测试依赖
-        self.__class__._created_resource_id = data.get("id")
-
-    def test_get_by_id(self):
-        """测试获取单个资源 - 前置: create"""
-        if not self.__class__._created_resource_id:
-            self.skipTest("请先执行前置测试: create")
-        response = [模块名]Api.get_by_id(self.client, self.__class__._created_resource_id)
-        self.assert_status_ok(response)
-```
-
-### 测试报告输出
-
-```json
-{
-  "timestamp": "2024-01-15T10:30:00",
-  "total_tests": 15,
-  "passed": 14,
-  "failed": 1,
-  "skipped": 0,
-  "report_path": "./output/reports/test_report_xxx.html"
-}
-```
-
-## 调用方式
-
-### 全量运行
-```bash
-python skill_driver.py run --all
-```
-
-### 指定接口运行
-```bash
-python skill_driver.py run --include "user|order"
-```
-
-### 增量运行
-```bash
-python skill_driver.py run --incremental
-```
-
-### 指定自定义Headers
-```bash
-python skill_driver.py run --all \
-  --header Authorization "Bearer xxx" \
-  --header X-Client-ID "my-client"
-```
-
-## 配置机制
-
-### 配置优先级（从高到低）
-1. 命令行参数
-2. 环境变量（`API_BASE_URL`, `API_HEADERS`, `API_TIMEOUT`）
-3. 工作目录配置（`api_test_config.yaml`）
-4. Skill默认配置（`references/config.yaml`）
-
-### 初始化项目（推荐）
-```bash
-cd /path/to/your/project
-python /path/to/java-api-test-skill/references/core/skill_driver.py init
-python /path/to/java-api-test-skill/references/core/skill_driver.py run --all
-```
-
-### 配置文件格式
-
-```yaml
-api:
-  base_url: http://localhost:8080
-  timeout: 30
-  default_headers:
-    Content-Type: application/json
-
-test:
-  output_dir: ./output/reports
-  report_format: html
-```
-
 ## 安全限制
-
-为保障系统安全，本Skill实现了以下安全限制：
 
 ### 文件系统安全
 - **路径边界检查**：必须在当前工作目录范围内，禁止访问上级目录或系统敏感目录
-- **目录白名单**：仅允许扫描 `src/`、`src/main/`、`swagger/`、`api/`、`controller/` 等源码和文档目录
-- **文件扩展名限制**：单个文件仅允许 `.java`、`.json`、`.yml`、`.yaml`
+- **目录白名单**：仅允许扫描 `src/`、`src/main/`、`swagger/`、`api/`、`controller/`、`controllers/` 等源码和文档目录
+- **文件扩展名限制**：单个文件仅允许 `.java`、`.json`、`.yml`、`.yaml`、`.swagger`
 - **敏感目录禁止**：禁止扫描包含 `.ssh`、`.git`、`/etc/`、`/root/`、`password`、`secret` 等敏感模式的路径
 - **工作目录隔离**：所有扫描操作都被限制在用户触发Skill时所在的工作目录内
 
@@ -313,8 +115,8 @@ test:
 ### 配置示例
 
 ```bash
-# 允许企业内部域名
-export API_ALLOWED_DOMAINS="company.com,intranet.example.com"
+# 添加企业内部域名白名单
+export API_ALLOWED_DOMAINS="company.com,intranet.mycompany.com"
 python skill_driver.py run --all
 ```
 
@@ -333,12 +135,21 @@ AI：即将执行测试，目标信息：
 AI：调用 skill_driver.py 执行测试
 ```
 
-这样可以避免未经用户确认就向外部发送请求，符合安全要求。
-
 ### 权限模型
 - 本Skill只读取用户指定范围内的Java源码和Swagger文档
 - 只向用户指定的API端点发送测试请求
 - 所有文件操作和网络请求都由用户明确授权后执行
+
+## 驱动命令（skill_driver.py）
+
+| 命令 | 参数 | 说明 |
+|------|------|------|
+| `init` | - | 初始化项目，生成配置文件和目录 |
+| `scan` | `--type java/swagger` `--path PATH` | 扫描接口，输出JSON |
+| `gen-api` | `--module NAME` `--base-path PATH` `--endpoints JSON` | 生成接口定义文件 |
+| `gen-test` | `--module NAME` `--base-path PATH` `--test-cases JSON` | 生成测试用例文件（含依赖链） |
+| `run` | `--all/--include PATTERN` `--headers JSON` | 执行测试，生成报告 |
+| `list` | `--type api/test` | 列出已生成的模块 |
 
 ## 版本历史
 
