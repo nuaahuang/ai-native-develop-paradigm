@@ -1,11 +1,11 @@
 ---
 name: java-api-test
-displayName: Java接口测试自动化工具
-description: 通过扫描Java工程接口，AI自动分析依赖关系编排数据流测试链，上游接口响应数据自动传递给下游接口，使用真实数据测试。动态生成Python自动化测试脚本，支持交互式授权、全量/增量测试。采用分层架构设计，核心框架稳定不变，接口定义和测试用例可动态生成。适用于Java后端项目的接口自动化测试回归验证。
-version: 1.3.0
+displayName: Java接口测试脚本生成工具
+description: 通过扫描Java工程接口，AI自动分析依赖关系编排数据流测试链，上游接口响应数据自动传递给下游接口。动态生成Python自动化测试脚本和测试用例代码。采用分层架构设计，核心框架稳定不变，接口定义和测试用例可动态生成。适用于Java后端项目的接口自动化测试脚本生成。
+version: 2.0.0
 author: Deric Huang
 category: 测试工具
-tags: ["接口测试", "自动化测试", "API测试", "Java"]
+tags: ["接口测试", "自动化测试", "API测试", "Java", "测试生成"]
 ---
 
 # java-api-test Skill
@@ -20,10 +20,9 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 核心能力：
 1. **接口扫描**：Java源码扫描(`src/`)和Swagger文档扫描(`swagger/`)，提取字段类型定义和响应结构
 2. **AI智能分析**：根据接口数据类型自动构建符合规范的请求体，识别接口间依赖关系
-3. **前置依赖链**：**自动编排数据流测试链**，上游接口响应数据自动传递给下游接口，使用真实数据测试
-4. **灵活执行**：支持全量测试、指定模块测试、增量测试（仅测试新增/修改接口）
+3. **前置依赖链**：**自动编排数据流测试链**，上游接口响应数据自动传递给下游接口
 
-**核心亮点**：AI自动分析接口依赖关系，生成完整数据流测试链 → `POST 创建资源 → GET 查询详情 → PUT 更新 → DELETE 删除`，上游接口的真实响应数据自动传递给下游接口，测试更贴近真实调用场景
+**核心亮点**：AI自动分析接口依赖关系，生成完整数据流测试链 → `POST 创建资源 → GET 查询详情 → PUT 更新 → DELETE 删除`，上游接口的响应数据自动传递给下游接口，测试脚本更贴近真实调用场景
 
 ## 核心架构
 
@@ -31,12 +30,15 @@ tags: ["接口测试", "自动化测试", "API测试", "Java"]
 
 ```
 {your-project}/
-├── apis/                    # 动态生成：接口定义文件 (# 动态生成)
-│   └── user_api.py
 ├── output/
-│   ├── tests/               # 动态生成：测试用例文件 (# 动态生成)
+│   ├── apis/               # 动态生成：接口定义文件 (# 动态生成)
+│   │   └── user_api.py
+│   ├── tests/              # 动态生成：测试用例文件 (# 动态生成)
 │   │   └── test_user.py
-│   └── reports/            # 输出：测试报告 (# 输出)
+│   ├── scripts/            # 动态生成：测试执行脚本 (# 动态生成)
+│   │   └── report_generator.py
+│   ├── run_tests.py        # 动态生成：完整测试执行器
+│   └── run_api_tests.py    # 动态生成：简化测试运行器
 └── api_test_config.yaml     # 配置文件 (# 可修改)
 
 java-api-test-skill/
@@ -46,8 +48,6 @@ java-api-test-skill/
 │   ├── api_scanner.py     # 接口扫描器（含安全检查）
 │   ├── base_test.py       # 测试基类（断言工具）
 │   ├── http_client.py     # HTTP客户端（含域名安全验证）
-│   ├── report_generator.py  # HTML/JSON报告生成
-│   ├── run_tests.py      # 多线程测试执行器
 │   └── skill_driver.py  # Skill驱动入口（命令路由）
 └── references/           # 参考文档和模板
     └── templates/
@@ -61,8 +61,8 @@ java-api-test-skill/
 |------|------|------|
 | **固定** | `scripts/` | 核心可执行脚本，稳定后无需修改 |
 | **可修改** | `{your-project}/api_test_config.yaml` | 用户配置文件，可按需调整 |
-| **动态生成** | `{your-project}/apis/` `{your-project}/output/tests/` | AI生成的接口定义和测试用例 |
-| **输出** | `{your-project}/output/reports/` | HTML + JSON 测试报告 |
+| **动态生成** | `{your-project}/output/apis/` `{your-project}/output/tests/` | AI生成的接口定义和测试用例 |
+| **可生成** | `{your-project}/output/run_tests.py` `{your-project}/output/run_api_tests.py` | 测试执行脚本（用户可自行执行） |
 | **模板** | `references/templates/` | 代码生成模板 |
 
 ## 核心工作流程（AI Skill驱动）
@@ -76,9 +76,8 @@ java-api-test-skill/
 | 5 | AI展示分析结果，确认测试范围 | 用户确认 |
 | 6 | AI调用 `skill_driver.py gen-api` | 生成 `apis/{module}_api.py` |
 | 7 | AI调用 `skill_driver.py gen-test` | 生成 `output/tests/test_{module}.py`（带依赖链） |
-| 8 | AI展示目标URL+掩码Headers | 用户确认执行 |
-| 9 | AI调用 `skill_driver.py run` | 执行测试，生成HTML+JSON报告 |
-| 10 | AI总结结果，展示报告链接 | - |
+| 8 | AI调用 `skill_driver.py gen-exec` | 生成测试执行脚本（用户可自行执行） |
+| 9 | AI总结结果，展示生成的文件和使用方式 | - |
 
 ## AI智能分析能力
 
@@ -96,13 +95,7 @@ java-api-test-skill/
 - 交叉匹配：**输入需求 ← 上游输出供给**，只向前匹配防循环
 - 生成 skipTest 安全回退：前置未执行则自动跳过
 
-## 支持的运行模式
 
-| 模式 | 说明 | 适用场景 |
-|------|------|----------|
-| 全量运行 | 执行所有测试用例 | 回归测试、发布前验证 |
-| 指定接口 | 按模块/名称正则匹配 | 开发调试、单模块验证 |
-| 增量运行 | 仅测试新增/修改的接口 | CI流水线、日常开发 |
 
 ## 安全限制
 
@@ -113,40 +106,9 @@ java-api-test-skill/
 - **敏感目录禁止**：禁止扫描包含 `.ssh`、`.git`、`/etc/`、`/root/`、`password`、`secret` 等敏感模式的路径
 - **工作目录隔离**：所有扫描操作都被限制在用户触发Skill时所在的工作目录内
 
-### 网络安全
-- **禁止访问云元数据**：禁止访问 `metadata`、`169.254.` 等云平台敏感地址
-- **HTTPS强制**：非本地服务必须使用HTTPS协议，禁止HTTP明文传输
-- **禁止模式**：禁止访问 `aws`、`alibaba`、`tencent`、`kubernetes` 等敏感关键词域名
-- **动态配置允许域名**：通过环境变量 `API_ALLOWED_DOMAINS=domain1,domain2` 配置额外允许的域名
-- **用户确认机制**：Skill AI 在执行网络请求前，必须向用户展示目标URL和掩码后的Headers，获得用户明确确认后才执行
-
-### 配置示例
-
-```bash
-# 添加企业内部域名白名单
-export API_ALLOWED_DOMAINS="company.com,intranet.mycompany.com"
-python skill_driver.py run --all
-```
-
-### AI交互安全确认流程
-
-```
-用户："运行所有测试"
-  ↓
-AI：即将执行测试，目标信息：
-  - Base URL: https://api.example.com
-  - Headers: Authorization: Bearer {masked}...
-  - 共计 X 个接口将被调用
-  ↓
-用户：确认执行
-  ↓
-AI：调用 skill_driver.py 执行测试
-```
-
 ### 权限模型
 - 本Skill只读取用户指定范围内的Java源码和Swagger文档
-- 只向用户指定的API端点发送测试请求
-- 所有文件操作和网络请求都由用户明确授权后执行
+- 所有文件操作都由用户明确授权后执行
 
 ## 驱动命令（scripts/skill_driver.py）
 
@@ -156,13 +118,14 @@ AI：调用 skill_driver.py 执行测试
 | `scan` | `--type java/swagger` `--path PATH` | 扫描接口，输出JSON |
 | `gen-api` | `--module NAME` `--base-path PATH` `--endpoints JSON` | 生成接口定义文件 |
 | `gen-test` | `--module NAME` `--base-path PATH` `--test-cases JSON` | 生成测试用例文件（含依赖链） |
-| `run` | `--all/--include PATTERN` `--headers JSON` | 执行测试，生成报告 |
+| `gen-exec` | - | 生成测试执行脚本到用户目录（用户可自行执行） |
 | `list` | `--type api/test` | 列出已生成的模块 |
 
 ## 版本历史
 
 | 版本 | 日期 | 变更内容 |
 |------|------|----------|
+| 2.0.0 | 2024-06-18 | 策略调整：移除自动执行功能，仅保留测试脚本和用例生成能力 |
 | 1.3.0 | 2024-06-17 | 安全加固：扫描路径白名单机制，限制只能扫描 src/swagger/api/controller 目录 |
 | 1.2.0 | 2024-06-17 | 安全加固：文件路径边界检查 + 网络域名白名单验证 |
 | 1.1.0 | 2024-06-17 | 新增AI智能数据类型分析和前置依赖链生成 |

@@ -1,7 +1,6 @@
 import argparse
 import os
 import json
-import subprocess
 import sys
 import re
 import random
@@ -219,7 +218,8 @@ class ''' + module_name.title() + '''Api:
 
 '''
     
-    file_path = './apis/' + module_name + '_api.py'
+    file_path = './output/apis/' + module_name + '_api.py'
+    os.makedirs('./output/apis', exist_ok=True)
     with open(file_path, 'w', encoding='utf-8') as f:
         f.write(content)
     
@@ -254,7 +254,7 @@ if skill_path not in sys.path:
     sys.path.insert(0, skill_path)
 
 from references.core.base_test import BaseTest
-from apis.''' + module_name + '''_api import ''' + class_name + '''
+from output.apis.''' + module_name + '''_api import ''' + class_name + '''
 
 
 class ''' + test_class_name + '''(BaseTest):
@@ -448,35 +448,10 @@ class ''' + test_class_name + '''(BaseTest):
     return file_path
 
 
-def run_tests(include_pattern=None, exclude_pattern=None, headers=None, base_url=None):
-    """执行测试并返回结果"""
-    run_tests_path = os.path.join(os.path.dirname(__file__), 'run_tests.py')
-    cmd = [sys.executable, run_tests_path]
-    
-    if include_pattern:
-        cmd.extend(['--include', include_pattern])
-    if exclude_pattern:
-        cmd.extend(['--exclude', exclude_pattern])
-    
-    env = os.environ.copy()
-    if headers:
-        env['API_HEADERS'] = json.dumps(headers)
-    if base_url:
-        env['API_BASE_URL'] = base_url
-    
-    result = subprocess.run(cmd, env=env, capture_output=True, text=True, cwd=os.getcwd())
-    
-    return {
-        'stdout': result.stdout,
-        'stderr': result.stderr,
-        'returncode': result.returncode
-    }
-
-
 def list_api_modules():
     """列出所有已定义的接口模块"""
     modules = []
-    api_dir = '../apis'
+    api_dir = './output/apis'
     
     if os.path.exists(api_dir):
         for filename in os.listdir(api_dir):
@@ -487,10 +462,100 @@ def list_api_modules():
     return modules
 
 
+def generate_exec_scripts():
+    """生成测试执行脚本到用户项目目录"""
+    scripts_dir = os.path.dirname(__file__)
+    
+    # 生成 run_tests.py
+    run_tests_src = os.path.join(scripts_dir, 'run_tests.py')
+    if os.path.exists(run_tests_src):
+        with open(run_tests_src, 'r', encoding='utf-8') as f:
+            run_tests_content = f.read()
+        
+        # 修改导入路径
+        run_tests_content = run_tests_content.replace(
+            'from report_generator import ReportGenerator',
+            'from output.scripts.report_generator import ReportGenerator'
+        )
+        
+        os.makedirs('./output', exist_ok=True)
+        with open('./output/run_tests.py', 'w', encoding='utf-8') as f:
+            f.write(run_tests_content)
+    
+    # 生成 report_generator.py
+    report_gen_src = os.path.join(scripts_dir, 'report_generator.py')
+    if os.path.exists(report_gen_src):
+        with open(report_gen_src, 'r', encoding='utf-8') as f:
+            report_gen_content = f.read()
+        
+        os.makedirs('./output/scripts', exist_ok=True)
+        with open('./output/scripts/report_generator.py', 'w', encoding='utf-8') as f:
+            f.write(report_gen_content)
+    
+    # 生成测试运行器 wrapper
+    runner_content = '''#!/usr/bin/env python3
+"""API测试执行器 - 运行生成的测试用例"""
+
+import subprocess
+import sys
+import os
+
+def run_all_tests():
+    """运行所有测试用例"""
+    print("开始执行API测试...")
+    result = subprocess.run(
+        [sys.executable, '-m', 'pytest', 'output/tests/', '-v'],
+        capture_output=True,
+        text=True
+    )
+    print(result.stdout)
+    if result.stderr:
+        print("错误输出:", result.stderr)
+    return result.returncode
+
+def run_module_tests(module_name):
+    """运行指定模块的测试"""
+    print(f"开始执行模块 [{module_name}] 的测试...")
+    result = subprocess.run(
+        [sys.executable, '-m', 'pytest', f'output/tests/test_{module_name}.py', '-v'],
+        capture_output=True,
+        text=True
+    )
+    print(result.stdout)
+    if result.stderr:
+        print("错误输出:", result.stderr)
+    return result.returncode
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='API测试执行器')
+    parser.add_argument('--all', action='store_true', help='运行所有测试')
+    parser.add_argument('--module', help='运行指定模块的测试')
+    args = parser.parse_args()
+    
+    if args.all:
+        exit(run_all_tests())
+    elif args.module:
+        exit(run_module_tests(args.module))
+    else:
+        print("请使用 --all 或 --module 参数")
+        exit(1)
+'''
+    
+    with open('./output/run_api_tests.py', 'w', encoding='utf-8') as f:
+        f.write(runner_content)
+    
+    return {
+        'status': 'success',
+        'message': '测试执行脚本生成完成！',
+        'files': ['./output/run_tests.py', './output/scripts/report_generator.py', './output/run_api_tests.py']
+    }
+
+
 def list_test_files():
     """列出所有测试文件"""
     tests = []
-    test_dir = '../output/tests'
+    test_dir = './output/tests'
     
     if os.path.exists(test_dir):
         for filename in os.listdir(test_dir):
@@ -505,7 +570,7 @@ def init_project():
     # 从模板目录读取配置模板
     template_path = os.path.join(
         os.path.dirname(__file__), 
-        '../templates/config.yaml'
+        '../references/templates/config.yaml'
     )
     
     if not os.path.exists(template_path):
@@ -523,12 +588,12 @@ def init_project():
         f.write(config_content)
     
     # 创建必要的目录
-    os.makedirs('./apis', exist_ok=True)
+    os.makedirs('./output/apis', exist_ok=True)
     os.makedirs('./output/tests', exist_ok=True)
     os.makedirs('./output/reports', exist_ok=True)
     
-    # 创建 apis/__init__.py
-    with open('./apis/__init__.py', 'w', encoding='utf-8') as f:
+    # 创建 output/apis/__init__.py
+    with open('./output/apis/__init__.py', 'w', encoding='utf-8') as f:
         f.write('''import os
 import importlib
 
@@ -550,7 +615,7 @@ __version__ = '1.0.0'
         'status': 'success',
         'message': '项目初始化完成！',
         'config_file': config_path,
-        'directories': ['./apis', './output/tests', './output/reports']
+        'directories': ['./output/apis', './output/tests', './output/reports']
     }
 
 
@@ -613,13 +678,8 @@ def main():
     gen_test_parser.add_argument('--test-cases', required=True, help='测试用例定义JSON')
     gen_test_parser.add_argument('--base-path', default='', help='API基础路径（用于依赖分析）')
     
-    # 运行测试
-    run_parser = subparsers.add_parser('run', help='运行测试')
-    run_parser.add_argument('--all', action='store_true', help='运行所有测试')
-    run_parser.add_argument('--include', help='包含的测试模块（正则）')
-    run_parser.add_argument('--exclude', help='排除的测试模块（正则）')
-    run_parser.add_argument('--headers', help='Headers JSON')
-    run_parser.add_argument('--base-url', help='API基础URL')
+    # 生成执行脚本
+    gen_exec_parser = subparsers.add_parser('gen-exec', help='生成测试执行脚本（用户可自行执行）')
     
     # 列出模块
     list_parser = subparsers.add_parser('list', help='列出可用模块')
@@ -651,10 +711,8 @@ def main():
         result = init_project()
         print(json.dumps(result))
     
-    elif args.command == 'run':
-        include_pattern = None if args.all else args.include
-        headers = json.loads(args.headers) if args.headers else None
-        result = run_tests(include_pattern, args.exclude, headers, args.base_url)
+    elif args.command == 'gen-exec':
+        result = generate_exec_scripts()
         print(json.dumps(result))
     
     elif args.command == 'list':
