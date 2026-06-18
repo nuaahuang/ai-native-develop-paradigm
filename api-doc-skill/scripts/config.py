@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 from typing import List, Optional
-import os
 import json
 
 
@@ -40,12 +39,6 @@ class ScanConfig:
 
 
 @dataclass
-class ImageConfig:
-    """图片处理配置"""
-    image_dir: str = "images"
-
-
-@dataclass
 class OutputConfig:
     """输出配置"""
     output_file: str
@@ -60,7 +53,6 @@ class OutputConfig:
 class Config:
     """全局配置"""
     scan: ScanConfig = field(default_factory=ScanConfig)
-    image: ImageConfig = field(default_factory=ImageConfig)
     output: OutputConfig = None
 
     @classmethod
@@ -75,17 +67,9 @@ class Config:
         config = cls()
         if 'scan' in data:
             config.scan = ScanConfig(**data['scan'])
-        if 'image' in data:
-            img_dir = data['image'].get('image_dir', 'images')
-            config.image = ImageConfig(image_dir=img_dir)
 
         return config
 
     def add_exclude_patterns(self, patterns: List[str]):
         """添加额外排除模式"""
         self.scan.exclude_patterns.extend(patterns)
-
-    def get_image_dir(self, output_file: str) -> str:
-        """获取图片目录绝对路径"""
-        output_dir = os.path.dirname(os.path.abspath(output_file))
-        return os.path.join(output_dir, self.image.image_dir)
