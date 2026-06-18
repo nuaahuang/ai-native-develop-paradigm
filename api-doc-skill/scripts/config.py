@@ -43,7 +43,6 @@ class OutputConfig:
     """输出配置"""
     output_file: str
     api_name: Optional[str] = None
-    version: Optional[str] = None
     export_openapi: Optional[str] = None
     scan_dir: Optional[str] = None
     exclude: Optional[List[str]] = None

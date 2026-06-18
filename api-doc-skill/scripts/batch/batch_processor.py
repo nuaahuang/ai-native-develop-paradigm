@@ -64,7 +64,7 @@ class BatchProcessor:
 
         return PlainTextParser()
 
-    def process_file(self, file_path: str, content: str, version: str = None) -> List[ApiInfo]:
+    def process_file(self, file_path: str, content: str) -> List[ApiInfo]:
         """处理单个文件，提取所有找到的接口"""
         results: List[ApiInfo] = []
 
@@ -86,7 +86,7 @@ class BatchProcessor:
                 if in_function and current_block:
                     # 处理之前的块
                     block_content = '\n'.join(current_block)
-                    api = self._try_parse(block_content, file_path, version)
+                    api = self._try_parse(block_content, file_path)
                     if api:
                         results.append(api)
                     current_block = []
@@ -98,50 +98,43 @@ class BatchProcessor:
         # 处理最后一个块
         if current_block:
             block_content = '\n'.join(current_block)
-            api = self._try_parse(block_content, file_path, version)
+            api = self._try_parse(block_content, file_path)
             if api:
                 results.append(api)
 
         # 如果没有找到任何接口，尝试整块解析
         if not results:
-            api = self._try_parse(content, file_path, version)
+            api = self._try_parse(content, file_path)
             if api:
                 results.append(api)
 
         return results
 
-    def _try_parse(self, code: str, file_path: str, version: str = None) -> ApiInfo:
+    def _try_parse(self, code: str, file_path: str) -> ApiInfo:
         """尝试解析代码，如果成功返回 ApiInfo"""
         parser = self.detect_parser(code, file_path)
         result = parser.parse(code, file_path)
         if result.success and result.api_info:
-            if version:
-                result.api_info.version = version
             return result.api_info
         return None
 
-    def process_all(self, files: List[Tuple[str, str]], version: str = None) -> List[ApiInfo]:
+    def process_all(self, files: List[Tuple[str, str]]) -> List[ApiInfo]:
         """处理所有文件"""
         all_apis: List[ApiInfo] = []
         for file_path, content in files:
-            apis = self.process_file(file_path, content, version)
+            apis = self.process_file(file_path, content)
             all_apis.extend(apis)
         return all_apis
 
     def get_statistics(self, apis: List[ApiInfo]) -> Dict[str, int]:
         """获取统计信息"""
-        by_version: Dict[str, int] = {}
         by_method: Dict[str, int] = {}
 
         for api in apis:
-            version = api.version or 'none'
-            by_version[version] = by_version.get(version, 0) + 1
-
             method = api.http_method
             by_method[method] = by_method.get(method, 0) + 1
 
         return {
             'total': len(apis),
-            'by_version': by_version,
             'by_method': by_method,
         }

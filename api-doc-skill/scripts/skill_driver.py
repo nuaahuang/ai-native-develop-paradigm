@@ -24,13 +24,11 @@ from scripts.parsers import (
 )
 from scripts.document.markdown_parser import MarkdownDocumentParser
 from scripts.document.markdown_generator import MarkdownGenerator
-from scripts.document.version_manager import VersionManager
 from scripts.batch.scanner import ProjectScanner
 from scripts.batch.batch_processor import BatchProcessor
 from scripts.exporters.openapi_exporter import OpenApiExporter
 from scripts.examples.example_generator import ExampleGenerator
 from scripts.validation.input_validator import InputValidator, ValidationResult
-
 
 
 class ApiDocSkill:
@@ -49,7 +47,6 @@ class ApiDocSkill:
         ]
         self.markdown_parser = MarkdownDocumentParser()
         self.markdown_generator = MarkdownGenerator(config)
-        self.version_manager = VersionManager()
         self.example_generator = ExampleGenerator()
         self.input_validator = InputValidator()
 
@@ -86,9 +83,6 @@ class ApiDocSkill:
         api = result.api_info
         if output_config.api_name:
             api.name = output_config.api_name
-        if output_config.version:
-            api.version = output_config.version
-            self.version_manager.update_version(output_config.version, api.path)
 
         # 生成测试示例
         self.example_generator.add_examples_to_api(api)
@@ -99,11 +93,8 @@ class ApiDocSkill:
         # 分配序号
         all_apis = self.markdown_generator.assign_sequences(existing_apis, [api])
 
-        # 分组
-        version_groups = self.version_manager.group_by_version(all_apis)
-
         # 生成完整文档
-        content = self.markdown_generator.generate_full_document(all_apis, version_groups)
+        content = self.markdown_generator.generate_full_document(all_apis)
 
         return all_apis, content
 
@@ -121,16 +112,10 @@ class ApiDocSkill:
         processor = BatchProcessor()
 
         all_files = list(scanner.scan(scan_dir))
-        apis = processor.process_all(all_files, output_config.version)
+        apis = processor.process_all(all_files)
 
         if not apis:
             return [], "未找到任何接口，请检查扫描目录和排除配置", {}
-
-        # 设置版本
-        if output_config.version:
-            for api in apis:
-                api.version = output_config.version
-                self.version_manager.update_version(output_config.version, api.path)
 
         # 生成测试示例
         for api in apis:
@@ -142,11 +127,8 @@ class ApiDocSkill:
         # 分配序号
         all_apis = self.markdown_generator.assign_sequences(existing_apis, apis)
 
-        # 分组
-        version_groups = self.version_manager.group_by_version(all_apis)
-
         # 生成完整文档
-        content = self.markdown_generator.generate_full_document(all_apis, version_groups)
+        content = self.markdown_generator.generate_full_document(all_apis)
 
         stats = processor.get_statistics(all_apis)
 
@@ -198,7 +180,6 @@ def parse_args():
     parser = argparse.ArgumentParser(description='api-doc-skill: 自动生成接口文档')
     parser.add_argument('--output', required=True, help='输出文档路径')
     parser.add_argument('--api-name', help='接口名称（不指定则自动推断）')
-    parser.add_argument('--version', help='API 版本，如 v1, v2')
     parser.add_argument('--scan-dir', help='批量扫描目录，批量生成所有接口')
     parser.add_argument('--exclude', nargs='*', help='额外排除模式')
     parser.add_argument('--export-openapi', help='导出 OpenAPI 文件路径')
@@ -220,11 +201,11 @@ def main():
     config.output = OutputConfig(
         output_file=args.output,
         api_name=args.api_name,
-        version=args.version,
         export_openapi=args.export_openapi,
         scan_dir=args.scan_dir,
         exclude=args.exclude,
     )
+
     # 执行
     skill = ApiDocSkill(config)
 
@@ -237,8 +218,6 @@ def main():
             sys.exit(1)
 
         print(f"扫描完成，共找到 {stats['total']} 个接口")
-        for version, count in stats.get('by_version', {}).items():
-            print(f"  {version}: {count} 个接口")
 
         saved = skill.save_document(content, args.output)
         if saved:

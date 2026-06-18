@@ -87,7 +87,6 @@ class OpenApiExporter:
         operation: Dict[str, Any] = {
             "summary": api.name,
             "description": api.description or f"{api.name} 接口",
-            "tags": [api.version] if api.version else [],
             "parameters": [],
             "responses": {},
         }

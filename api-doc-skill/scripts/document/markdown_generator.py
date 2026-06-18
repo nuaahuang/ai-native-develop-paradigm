@@ -12,10 +12,8 @@ class MarkdownGenerator:
     def __init__(self, config: Config):
         self.config = config
 
-    def generate_full_document(self, interfaces: List[ApiInfo], version_interfaces: Dict[str, List[ApiInfo]] = None) -> str:
+    def generate_full_document(self, interfaces: List[ApiInfo]) -> str:
         """生成完整文档"""
-        version_interfaces = version_interfaces or {}
-
         lines = []
         lines.append('# 接口文档\n')
         lines.append('> 自动生成，请勿手动修改\n')
@@ -24,71 +22,42 @@ class MarkdownGenerator:
         lines.append('')
 
         # 生成目录
-        lines.extend(self._generate_toc(interfaces, version_interfaces))
+        lines.extend(self._generate_toc(interfaces))
         lines.append('')
         lines.append('---')
         lines.append('')
 
-        # 按版本分组生成
-        if version_interfaces:
-            for version, apis in sorted(version_interfaces.items()):
-                lines.append(f'## {version} 版本')
-                lines.append('')
-                for api in sorted(apis, key=lambda x: x.sequence):
-                    lines.extend(self._generate_api_section(api, version))
-                    lines.append('')
-                    lines.append('---')
-                    lines.append('')
-        else:
-            # 无版本，直接按序号生成
-            for api in sorted(interfaces, key=lambda x: x.sequence):
-                lines.extend(self._generate_api_section(api))
-                lines.append('')
-                lines.append('---')
-                lines.append('')
+        # 按序号生成接口章节
+        for api in sorted(interfaces, key=lambda x: x.sequence):
+            lines.extend(self._generate_api_section(api))
+            lines.append('')
+            lines.append('---')
+            lines.append('')
 
         return '\n'.join(lines)
 
-    def _generate_toc(self, interfaces: List[ApiInfo], version_interfaces: Dict[str, List[ApiInfo]]) -> List[str]:
+    def _generate_toc(self, interfaces: List[ApiInfo]) -> List[str]:
         """生成目录"""
         lines = ['## 目录', '']
 
-        if version_interfaces:
-            # 按版本分组
-            for version, apis in sorted(version_interfaces.items()):
-                lines.append(f'### {version}')
-                sorted_apis = sorted(apis, key=lambda x: x.sequence)
-                for i, api in enumerate(sorted_apis, 1):
-                    anchor = self._get_anchor(api, version)
-                    name = api.name
-                    lines.append(f'{i}. [{version}-{api.sequence}-{name}](#{anchor})')
-                lines.append('')
-        else:
-            sorted_apis = sorted(interfaces, key=lambda x: x.sequence)
-            for i, api in enumerate(sorted_apis, 1):
-                anchor = self._get_anchor(api)
-                name = api.name
-                lines.append(f'{i}. [{api.sequence}-{name}](#{anchor})')
+        sorted_apis = sorted(interfaces, key=lambda x: x.sequence)
+        for i, api in enumerate(sorted_apis, 1):
+            anchor = self._get_anchor(api)
+            name = api.name
+            lines.append(f'{i}. [{api.sequence}-{name}](#{anchor})')
 
         return lines
 
-    def _get_anchor(self, api: ApiInfo, version: Optional[str] = None) -> str:
+    def _get_anchor(self, api: ApiInfo) -> str:
         """获取锚点"""
-        v = version or api.version
-        if v:
-            return f'{v}-{api.sequence}-接口{api.name}'.lower().replace(' ', '-')
         return f'{api.sequence}-接口{api.name}'.lower().replace(' ', '-')
 
-    def _generate_api_section(self, api: ApiInfo, version: Optional[str] = None) -> List[str]:
+    def _generate_api_section(self, api: ApiInfo) -> List[str]:
         """生成单个接口章节"""
         lines = []
 
         # 标题
-        v = version or api.version
-        if v:
-            lines.append(f'## {v}-{api.sequence}-接口：{api.name}')
-        else:
-            lines.append(f'## {api.sequence}-接口：{api.name}')
+        lines.append(f'## {api.sequence}-接口：{api.name}')
         lines.append('')
 
         # 基本信息
@@ -98,8 +67,6 @@ class MarkdownGenerator:
         lines.append('|------|-----|')
         lines.append(f'| **接口序号** | {api.sequence} |')
         lines.append(f'| **接口名称** | {api.name} |')
-        if v:
-            lines.append(f'| **版本** | {v} |')
         lines.append(f'| **接口路径** | `{api.http_method} {api.path}` |')
         if api.source_file:
             lines.append(f'| **所属文件** | `{api.source_file}` |')
@@ -226,17 +193,6 @@ class MarkdownGenerator:
                 lines.append(f'- {suggestion}')
             lines.append('')
 
-        # 变更历史
-        if api.change_history:
-            lines.append('### 变更历史')
-            lines.append('')
-            lines.append('| 版本 | 时间 | 类型 | 变更说明 |')
-            lines.append('|------|------|------|----------|')
-            for change in api.change_history:
-                changed_at = change.changed_at.strftime("%Y-%m-%d")
-                lines.append(f'| {change.version} | {changed_at} | {change.change_type} | {change.change_log} |')
-            lines.append('')
-
         return lines
 
     def assign_sequences(self, existing_interfaces: List[ApiInfo], new_interfaces: List[ApiInfo]) -> List[ApiInfo]:
@@ -251,10 +207,10 @@ class MarkdownGenerator:
         result = existing_interfaces.copy()
 
         for new_api in new_interfaces:
-            # 检查是否已经存在（同路径同版本）
+            # 检查是否已经存在（同路径）
             exists = False
             for i, existing in enumerate(result):
-                if existing.path == new_api.path and existing.version == new_api.version:
+                if existing.path == new_api.path:
                     # 保持原有序号，更新内容
                     new_api.sequence = existing.sequence
                     result[i] = new_api
