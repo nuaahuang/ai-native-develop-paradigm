@@ -40,9 +40,6 @@ class SkillRequest:
     scan_dir: Optional[str]      # 批量扫描目录
     exclude: Optional[List[str]] # 额外排除模式
     export_openapi: Optional[str] # 导出 OpenAPI 路径
-    image_format: str = 'local'
-    image_upload: Optional[str] = None
-    image_dir: str = 'images'
     source_file: Optional[str] = None  # 选中代码所属文件
 
 
@@ -105,10 +102,6 @@ class ApiDocSkillDialog:
             exclude=request.exclude,
         )
         self.config.output = output_config
-        self.config.image.image_format = request.image_format
-        self.config.image.image_upload = request.image_upload
-        self.config.image.image_dir = request.image_dir
-
         # 批量扫描模式
         if request.scan_dir:
             return self._execute_batch(request, output_config)
@@ -325,8 +318,6 @@ def parse_command_args(args_text: str) -> SkillRequest:
         'version': r'--version\s*=\s*["\']?([^"\']+)["\']?',
         'scan-dir': r'--scan-dir\s*=\s*["\']?([^"\']+)["\']?',
         'export-openapi': r'--export-openapi\s*=\s*["\']?([^"\']+)["\']?',
-        'image-format': r'--image-format\s*=\s*["\']?([^"\']+)["\']?',
-        'image-upload': r'--image-upload\s*=\s*["\']?([^"\']+)["\']?',
         'image-dir': r'--image-dir\s*=\s*["\']?([^"\']+)["\']?',
     }
 

@@ -42,13 +42,7 @@ class ScanConfig:
 @dataclass
 class ImageConfig:
     """图片处理配置"""
-    image_format: str = "local"  # local, base64, url
-    image_upload: Optional[str] = None  # wecom, qiniu, oss
     image_dir: str = "images"
-    validate_image: bool = True
-    compress_image: bool = False
-    max_width: int = 1200
-    max_height: int = 800
 
 
 @dataclass
@@ -82,7 +76,8 @@ class Config:
         if 'scan' in data:
             config.scan = ScanConfig(**data['scan'])
         if 'image' in data:
-            config.image = ImageConfig(**data['image'])
+            img_dir = data['image'].get('image_dir', 'images')
+            config.image = ImageConfig(image_dir=img_dir)
 
         return config
 

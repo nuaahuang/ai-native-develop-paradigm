@@ -30,8 +30,6 @@ version: 2.0.0
 | --scan-dir | 否 | 批量扫描目录，一次性生成所有接口文档 |
 | --exclude | 否 | 批量扫描时额外排除的模式，多个用空格分隔 |
 | --export-openapi | 否 | 导出 OpenAPI 3.0 文件路径，支持 .json/.yaml |
-| --image-format | 否 | 图片格式：local（默认）/ base64 / url |
-| --image-upload | 否 | 图片上传目标：wecom / qiniu / oss |
 | --image-dir | 否 | 本地图片保存目录（默认：./images） |
 | --config | 否 | 配置文件路径（JSON 格式） |
 
@@ -111,10 +109,6 @@ version: 2.0.0
 | **接口路径** | `POST /api/order` |
 ```
 
-### 企业微信迁移方案
-
-使用 `--image-format="base64"` 参数可以将图片转为 Base64 编码内联到文档中，方便拷贝到企业微信文档。
-
 ## 示例
 
 ### 示例 1：基本用法（单个接口）
@@ -129,32 +123,26 @@ version: 2.0.0
 /api-doc --output="./docs/api.md" --api-name="查询阶段报告详情"
 ```
 
-### 示例 3：生成适合企业微信的文档（图片内联）
-
-```
-/api-doc --output="./docs/api.md" --image-format="base64"
-```
-
-### 示例 4：批量扫描整个项目
+### 示例 3：批量扫描整个项目
 
 ```
 /api-doc --output="./docs/api.md" --scan-dir=./src --exclude=tests
 ```
 
-### 示例 5：指定版本分组
+### 示例 4：指定版本分组
 
 ```
 /api-doc --output="./docs/api.md" --scan-dir=./src/v1 --version=v1
 /api-doc --output="./docs/api.md" --scan-dir=./src/v2 --version=v2
 ```
 
-### 示例 6：同时导出 OpenAPI
+### 示例 5：同时导出 OpenAPI
 
 ```
 /api-doc --output="./docs/api.md" --scan-dir=./src --export-openapi=./docs/openapi.json
 ```
 
-### 示例 7：导出 OpenAPI YAML 格式
+### 示例 6：导出 OpenAPI YAML 格式
 
 ```
 /api-doc --output="./docs/api.md" --export-openapi=./docs/openapi.yaml
@@ -165,6 +153,6 @@ version: 2.0.0
 1. **强制序号**：每个接口**必须**包含唯一序号，序号从 1 开始递增，不可重复或跳过
 2. **序号保持**：更新已存在的接口时，序号保持不变
 3. 确保选中的代码包含完整的接口定义
-4. UI 截图会保存到文档目录下的 images 文件夹（使用 local 格式时）
+4. UI 截图会保存到文档目录下的 images 文件夹
 5. 相同路径的接口会自动更新，不会重复添加
 6. 生成的文档格式统一，便于拷贝和迁移

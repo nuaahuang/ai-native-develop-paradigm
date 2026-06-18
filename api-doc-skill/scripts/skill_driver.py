@@ -30,7 +30,7 @@ from scripts.batch.batch_processor import BatchProcessor
 from scripts.exporters.openapi_exporter import OpenApiExporter
 from scripts.examples.example_generator import ExampleGenerator
 from scripts.validation.input_validator import InputValidator, ValidationResult
-from scripts.images.validator import ImageValidator
+
 
 
 class ApiDocSkill:
@@ -202,9 +202,6 @@ def parse_args():
     parser.add_argument('--scan-dir', help='批量扫描目录，批量生成所有接口')
     parser.add_argument('--exclude', nargs='*', help='额外排除模式')
     parser.add_argument('--export-openapi', help='导出 OpenAPI 文件路径')
-    parser.add_argument('--image-format', default='local', help='图片格式: local/base64/url')
-    parser.add_argument('--image-upload', help='图片上传目标: wecom/qiniu/oss')
-    parser.add_argument('--image-dir', default='images', help='本地图片目录')
     parser.add_argument('--config', help='配置文件路径')
     return parser.parse_args()
 
@@ -228,10 +225,6 @@ def main():
         scan_dir=args.scan_dir,
         exclude=args.exclude,
     )
-    config.image.image_format = args.image_format
-    config.image.image_upload = args.image_upload
-    config.image.image_dir = args.image_dir
-
     # 执行
     skill = ApiDocSkill(config)
 
