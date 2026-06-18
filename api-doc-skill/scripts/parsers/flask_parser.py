@@ -12,7 +12,9 @@ class FlaskParser(BaseParser):
     # 检测特征关键词
     DETECT_PATTERNS = [
         r'@app\.route',
+        r'@app\.(get|post|put|delete|patch)',  # Flask 2.0+ 简写
         r'@.*\.route',  # blueprint
+        r'@.*\.(get|post|put|delete|patch)',  # blueprint 简写
         r'from flask',
         r'Flask\(',
         r'Blueprint\(',
@@ -21,6 +23,8 @@ class FlaskParser(BaseParser):
     # 路由模式
     ROUTE_PATTERN = r'@(?:app|.*?blueprint|.*_bp)\.route\s*\(\s*(["\'])(.*?)\1\s*'
     ROUTE_PATTERN_ALT = r'@\w+\.route\s*\(\s*(["\'])(.*?)\1\s*'
+    # Flask 2.0+ 简写形式 @app.get("/path")
+    ROUTE_PATTERN_METHOD = r'@(\w+)\.(get|post|put|delete|patch)\s*\(\s*(["\'])(.*?)\3\s*'
     METHODS_PATTERN = r'methods\s*=\s*\[(.*?)\]'
 
     def detect(self, code: str) -> bool:
@@ -34,17 +38,28 @@ class FlaskParser(BaseParser):
         """解析 Flask 代码"""
         # 提取路由路径
         path_match = re.search(self.ROUTE_PATTERN, code, re.DOTALL)
+        http_method = None
+        
+        # 尝试匹配 Flask 2.0+ 简写形式 @app.get("/path")
         if not path_match:
-            path_match = re.search(self.ROUTE_PATTERN_ALT, code, re.DOTALL)
+            method_match = re.search(self.ROUTE_PATTERN_METHOD, code, re.DOTALL)
+            if method_match:
+                http_method = method_match.group(2).upper()
+                path = method_match.group(4)
+                path = self.cleanup_path(path)
+            else:
+                path_match = re.search(self.ROUTE_PATTERN_ALT, code, re.DOTALL)
+                if not path_match:
+                    return ParseResult.fail("无法找到 @app.route 装饰器，请确保代码包含完整路由定义")
+                path = path_match.group(2)
+                path = self.cleanup_path(path)
+        else:
+            path = path_match.group(2)
+            path = self.cleanup_path(path)
 
-        if not path_match:
-            return ParseResult.fail("无法找到 @app.route 装饰器，请确保代码包含完整路由定义")
-
-        path = path_match.group(2)
-        path = self.cleanup_path(path)
-
-        # 提取 HTTP 方法
-        http_method = self._extract_methods(code)
+        # 提取 HTTP 方法（如果还没从简写形式获取）
+        if http_method is None:
+            http_method = self._extract_methods(code)
 
         # 提取接口名称
         api_name = self._extract_api_name(code, path)
