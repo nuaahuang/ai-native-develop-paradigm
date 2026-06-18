@@ -2,7 +2,7 @@
 name: api-doc
 description: 版本迭代过程中，快速生成供前后端交流用的 Markdown 接口文档。支持从选中代码自动提取接口定义，增量更新。专注人工阅读交流，不生成机器消费的 OpenAPI。本工具只生成文档和测试示例代码，不实际发送网络请求。
 author: deganghuang
-version: 2.1.0
+version: 2.2.0
 ---
 
 # api-doc
@@ -15,7 +15,6 @@ version: 2.1.0
 
 - 当需要生成或更新接口文档时触发
 - 用户在编辑器中选中接口代码后触发
-- 需要批量扫描整个项目生成完整文档时触发
 - 需要导出 OpenAPI 格式集成到其他工具时触发
 
 ## 参数说明
@@ -24,10 +23,7 @@ version: 2.1.0
 |------|------|------|
 | --output | 是 | 输出文档路径，如 ./docs/api.md |
 | --api-name | 否 | 接口名称，不指定则自动推断 |
-| --scan-dir | 否 | 批量扫描目录，一次性生成所有接口文档 |
-| --exclude | 否 | 批量扫描时额外排除的模式，多个用空格分隔 |
 | --export-openapi | 否 | 导出 OpenAPI 3.0 文件路径，支持 .json/.yaml |
-| --config | 否 | 配置文件路径（JSON 格式） |
 
 ## 工作流程
 
@@ -114,19 +110,13 @@ version: 2.1.0
 /api-doc --output="./docs/api.md" --api-name="查询阶段报告详情"
 ```
 
-### 示例 3：批量扫描整个项目
+### 示例 3：导出 OpenAPI
 
 ```
-/api-doc --output="./docs/api.md" --scan-dir=./src --exclude=tests
+/api-doc --output="./docs/api.md" --export-openapi=./docs/openapi.json
 ```
 
-### 示例 4：同时导出 OpenAPI
-
-```
-/api-doc --output="./docs/api.md" --scan-dir=./src --export-openapi=./docs/openapi.json
-```
-
-### 示例 5：导出 OpenAPI YAML 格式
+### 示例 4：导出 OpenAPI YAML 格式
 
 ```
 /api-doc --output="./docs/api.md" --export-openapi=./docs/openapi.yaml

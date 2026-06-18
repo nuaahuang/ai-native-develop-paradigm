@@ -4,15 +4,12 @@
 """
 
 import os
-import sys
-from typing import Optional, List, Dict
+from typing import Optional, List
 from dataclasses import dataclass
 
 from scripts.models.api_info import ApiInfo
 from scripts.config import Config, OutputConfig
-from scripts.validation.input_validator import InputValidator, ValidationResult
-from scripts.batch.scanner import ProjectScanner
-from scripts.batch.batch_processor import BatchProcessor
+from scripts.validation.input_validator import InputValidator
 from scripts.document.markdown_parser import MarkdownDocumentParser
 from scripts.document.markdown_generator import MarkdownGenerator
 from scripts.exporters.openapi_exporter import OpenApiExporter
@@ -32,11 +29,9 @@ from scripts.parsers import (
 @dataclass
 class SkillRequest:
     """Skill 请求"""
-    code: str                    # 选中的代码（单接口模式）
+    code: str                    # 选中的代码
     output_file: str            # 输出文档路径
     api_name: Optional[str]      # 接口名称
-    scan_dir: Optional[str]      # 批量扫描目录
-    exclude: Optional[List[str]] # 额外排除模式
     export_openapi: Optional[str] # 导出 OpenAPI 路径
     source_file: Optional[str] = None  # 选中代码所属文件
 
@@ -89,26 +84,17 @@ class ApiDocSkillDialog:
 
     def execute(self, request: SkillRequest) -> SkillResponse:
         """执行 Skill 请求"""
-        # 更新配置
         output_config = OutputConfig(
             output_file=request.output_file,
             api_name=request.api_name,
             export_openapi=request.export_openapi,
-            scan_dir=request.scan_dir,
-            exclude=request.exclude,
         )
         self.config.output = output_config
 
-        # 批量扫描模式
-        if request.scan_dir:
-            return self._execute_batch(request, output_config)
-
-        # 单接口模式
         return self._execute_single(request, output_config)
 
     def _execute_single(self, request: SkillRequest, output_config: OutputConfig) -> SkillResponse:
         """处理单接口请求"""
-        # 输入验证
         val_result = self.input_validator.validate_code(request.code)
         if not val_result.is_valid():
             return SkillResponse(
@@ -125,7 +111,6 @@ class ApiDocSkillDialog:
                 errors=val_result.get_error_messages()
             )
 
-        # 解析
         result = self.parse_code(request.code, request.source_file)
         if not result.success or not result.api_info:
             return SkillResponse(
@@ -138,20 +123,15 @@ class ApiDocSkillDialog:
         if output_config.api_name:
             api.name = output_config.api_name
 
-        # 生成测试示例
         self.example_generator.add_examples_to_api(api)
 
-        # 读取现有文档
         existing_apis = self._read_existing_apis(output_config.output_file)
 
-        # 分配序号
         generator = MarkdownGenerator(self.config)
         all_apis = generator.assign_sequences(existing_apis, [api])
 
-        # 生成完整文档
         content = generator.generate_full_document(all_apis)
 
-        # 保存
         saved = self._save_document(content, output_config.output_file)
         if not saved:
             return SkillResponse(
@@ -159,7 +139,6 @@ class ApiDocSkillDialog:
                 message=f"无法保存文档到 {output_config.output_file}",
             )
 
-        # 导出 OpenAPI
         openapi_exported = False
         if output_config.export_openapi:
             exporter = OpenApiExporter(title=f"{api.name} API")
@@ -170,72 +149,6 @@ class ApiDocSkillDialog:
             success=True,
             message=self._format_success_message(len(all_apis), output_config, openapi_exported),
             api_count=len(all_apis),
-            openapi_exported=openapi_exported,
-        )
-
-    def _execute_batch(self, request: SkillRequest, output_config: OutputConfig) -> SkillResponse:
-        """处理批量扫描请求"""
-        # 输入验证
-        val_result = self.input_validator.validate_scan_dir(request.scan_dir)
-        if not val_result.is_valid():
-            return SkillResponse(
-                success=False,
-                message='\n'.join(val_result.get_error_messages()),
-                errors=val_result.get_error_messages()
-            )
-
-        # 扫描
-        scanner = ProjectScanner(self.config.scan)
-        if output_config.exclude:
-            scanner.add_exclude_patterns(output_config.exclude)
-
-        processor = BatchProcessor()
-        all_files = list(scanner.scan(request.scan_dir))
-        apis = processor.process_all(all_files)
-
-        if not apis:
-            return SkillResponse(
-                success=False,
-                message=f"在目录 {request.scan_dir} 中未找到任何接口，请检查配置",
-            )
-
-        # 生成测试示例
-        for api in apis:
-            self.example_generator.add_examples_to_api(api)
-
-        # 读取现有文档
-        existing_apis = self._read_existing_apis(output_config.output_file)
-
-        # 分配序号
-        generator = MarkdownGenerator(self.config)
-        all_apis = generator.assign_sequences(existing_apis, apis)
-
-        # 生成完整文档
-        content = generator.generate_full_document(all_apis)
-
-        # 保存
-        saved = self._save_document(content, output_config.output_file)
-        if not saved:
-            return SkillResponse(
-                success=False,
-                message=f"无法保存文档到 {output_config.output_file}",
-            )
-
-        # 导出 OpenAPI
-        openapi_exported = False
-        if output_config.export_openapi:
-            title = os.path.basename(request.output_file).replace('.md', '')
-            exporter = OpenApiExporter(title=title)
-            exporter.save(all_apis, output_config.export_openapi)
-            openapi_exported = True
-
-        # 统计
-        stats = processor.get_statistics(all_apis)
-
-        return SkillResponse(
-            success=True,
-            message=self._format_batch_success(stats, output_config, openapi_exported),
-            api_count=stats['total'],
             openapi_exported=openapi_exported,
         )
 
@@ -269,31 +182,19 @@ class ApiDocSkillDialog:
             msg += f"   OpenAPI 已导出到 {config.export_openapi}\n"
         return msg
 
-    def _format_batch_success(self, stats: Dict, config: OutputConfig, openapi_exported: bool) -> str:
-        """格式化批量成功消息"""
-        msg = f"✅ 批量扫描完成，文档已保存到 `{config.output_file}`\n"
-        msg += f"   共扫描找到 {stats['total']} 个接口\n"
-        if openapi_exported:
-            msg += f"   OpenAPI 已导出到 {config.export_openapi}\n"
-        return msg
-
 
 def parse_command_args(args_text: str) -> SkillRequest:
     """从对话命令参数解析请求"""
-    # args_text 是 "--output=./docs/api.md --api-name=xxx" 格式
     request = SkillRequest(
         code="",
         output_file="",
     )
 
-    # 简单解析参数
     import re
     patterns = {
         'output': r'--output\s*=\s*["\']?([^"\']+)["\']?',
         'api-name': r'--api-name\s*=\s*["\']?([^"\']+)["\']?',
-        'scan-dir': r'--scan-dir\s*=\s*["\']?([^"\']+)["\']?',
         'export-openapi': r'--export-openapi\s*=\s*["\']?([^"\']+)["\']?',
-        'image-dir': r'--image-dir\s*=\s*["\']?([^"\']+)["\']?',
     }
 
     for key, pattern in patterns.items():
@@ -301,10 +202,5 @@ def parse_command_args(args_text: str) -> SkillRequest:
         if match:
             value = match.group(1).strip()
             setattr(request, key.replace('-', '_'), value)
-
-    # 解析 exclude
-    exclude_match = re.findall(r'--exclude\s+([^\s]+)', args_text)
-    if exclude_match:
-        request.exclude = exclude_match
 
     return request

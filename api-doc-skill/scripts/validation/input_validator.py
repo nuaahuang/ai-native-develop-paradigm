@@ -60,7 +60,6 @@ class InputValidator:
         """验证输入代码"""
         result = ValidationResult(valid=True)
 
-        # 检查空代码
         code = code.strip()
         if not code:
             result.add_error(ValidationError(
@@ -70,7 +69,6 @@ class InputValidator:
             ))
             return result
 
-        # 检查最小长度
         if len(code) < 10:
             result.add_error(ValidationError(
                 code=ErrorCode.INCOMPLETE_INFO,
@@ -107,61 +105,11 @@ class InputValidator:
             ))
             return result
 
-        # 检查必填字段
         if not api_info.http_method or not api_info.path:
             result.add_error(ValidationError(
                 code=ErrorCode.INCOMPLETE_INFO,
                 message="解析出的信息不完整，缺少 HTTP 方法或路径",
                 suggestion="请检查代码格式是否正确，确保路由定义完整"
             ))
-
-        if not api_info.name:
-            # 这是警告不是错误，可以继续
-            pass
-
-        return result
-
-    @staticmethod
-    def validate_scan_dir(scan_dir: str) -> ValidationResult:
-        """验证扫描目录"""
-        import os
-        result = ValidationResult(valid=True)
-
-        if not os.path.exists(scan_dir):
-            result.add_error(ValidationError(
-                code=ErrorCode.FILE_NOT_FOUND,
-                message=f"扫描目录不存在: {scan_dir}",
-                suggestion="请检查目录路径是否正确"
-            ))
-        elif not os.path.isdir(scan_dir):
-            result.add_error(ValidationError(
-                code=ErrorCode.FILE_NOT_FOUND,
-                message=f"{scan_dir} 不是一个目录",
-                suggestion="请指定一个存在的目录路径"
-            ))
-        else:
-            # 安全检查：确保扫描目录在当前工作目录范围内
-            cwd = os.getcwd()
-            cwd_abs = os.path.abspath(cwd)
-            scan_abs = os.path.abspath(scan_dir)
-
-            cwd_abs = os.path.normpath(cwd_abs)
-            scan_abs = os.path.normpath(scan_abs)
-
-            # 检查是否在当前工作目录范围内
-            if not scan_abs.startswith(cwd_abs + os.sep) and scan_abs != cwd_abs:
-                result.add_error(ValidationError(
-                    code=ErrorCode.PERMISSION_DENIED,
-                    message=f"扫描路径超出当前工作目录范围: {scan_dir}",
-                    suggestion="只能扫描当前工作目录范围内的目录"
-                ))
-
-            # 禁止访问上级目录
-            if '..' in os.path.relpath(scan_abs, cwd_abs):
-                result.add_error(ValidationError(
-                    code=ErrorCode.PERMISSION_DENIED,
-                    message=f"扫描路径包含 .. ，禁止访问上级目录: {scan_dir}",
-                    suggestion="请使用当前目录范围内的相对路径"
-                ))
 
         return result
