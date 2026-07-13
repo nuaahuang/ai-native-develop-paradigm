@@ -1,11 +1,6 @@
 ---
 name: requirement-split
-displayName: 需求拆分工具
 description: 将需求文档拆分为需求项和工作项，生成工时预估表
-version: 1.1.0
-author: Deric Huang
-category: 开发工具
-tags: ["需求分析", "工时预估", "项目管理"]
 ---
 
 # requirement-split Skill
@@ -16,7 +11,7 @@ tags: ["需求分析", "工时预估", "项目管理"]
 
 ## 完整处理流程（12步）
 
-| 步骤 | 执行者 | 描述 | 违背惩罚 |
+| 步骤 | 执行者 | 描述 | 禁止行为 |
 |------|--------|------|----------|
 | 1 | 用户 | 提供原始需求MD文档 + 设计稿 | - |
 | 2 | MCP/手动 | 解析设计稿，提取页面结构、组件、交互 | - |
@@ -25,10 +20,10 @@ tags: ["需求分析", "工时预估", "项目管理"]
 | 5 | 大模型 | 分析核心数据流和页面流 | - |
 | 6 | 大模型 | 工作包定义 + 技术难度和复杂性分析 | - |
 | 7 | 大模型+用户 | **按 CHECKLIST.md** 识别待澄清问题并逐一确认 | ❌ 禁止跳过 |
-| 8 | 大模型 | 按 **TEMPLATES.md** 模板生成 `./output/clarified-requirement.md` | ❌ 禁止跳过 |
+| 8 | 大模型 | 按 **TEMPLATES.md** 模板生成 `clarified-requirement.md` | ❌ 禁止跳过 |
 | 9 | 大模型 | 基于新MD文档拆分需求项和工作项，预估工时 | ❌ 禁止基于原MD |
-| 10 | 大模型 | 输出 `./output/requirement-split.json` | - |
-| 11 | Python脚本 | 读取JSON生成 `./output/work-plan.csv` | - |
+| 10 | 大模型 | 输出 `requirement-split.json` | - |
+| 11 | Python脚本 | 读取JSON生成 `work-plan.csv` | - |
 | 12 | 大模型 | 自动化验收：验证完整性和合理性 | ❌ 禁止跳过 |
 
 **参考文件**：
@@ -42,7 +37,11 @@ tags: ["需求分析", "工时预估", "项目管理"]
 |--------|----------|----------|
 | 需求项完整性 | 所有能力点都有对应需求项 | ✅ 无遗漏 |
 | 工作项覆盖度 | 每个需求项至少有1个工作项 | ✅ 全覆盖 |
-| 工时预估合理性 | 工时值在1.0-24小时范围内 | ✅ 符合区间 |
+| 工时公式完整性 | 每个非零子项都包含基准类型、基准工时、复杂度、系数、调整工时和计算工时 | ✅ 字段完整 |
+| 工时计算正确性 | `calculated_hours = base_hours × complexity_coefficient + adjustment_hours` | ✅ 公式成立 |
+| 父子工时一致性 | 父级前后端工时分别等于对应子项计算工时之和 | ✅ 汇总一致 |
+| 工时预估合理性 | 非零工时在1.0-24小时范围内，调整工时在-2.0至2.0小时范围内 | ✅ 符合区间 |
+| 复用与重复计时 | 已有能力复用必须降低估算，通用能力不得在多个工作项重复计时 | ✅ 无重复计算 |
 | 前后端关联 | 每个交互点关联到对应接口 | ✅ 关联正确 |
 | 技术难点识别 | 复杂功能标注技术难点 | ✅ 已标注 |
 
@@ -71,8 +70,6 @@ tags: ["需求分析", "工时预估", "项目管理"]
 | `clarified-requirement.md` | Markdown | 澄清后的完整需求文档 |
 | `requirement-split.json` | JSON | 结构化需求拆分数据 |
 | `work-plan.csv` | CSV | 工作计划预估表 |
-
-**输出目录约束**：所有产物默认保存到 `./output/` 目录下（相对于项目根目录）。
 
 ## 分解粒度标准
 
@@ -138,8 +135,19 @@ tags: ["需求分析", "工时预估", "项目管理"]
               "name": "接口或逻辑名称",
               "type": "接口开发/逻辑开发/数据设计",
               "level": "interface",
-              "backend_hours": 工时,
-              "frontend_hours": 工时,
+              "backend_hours": 后端计算工时,
+              "frontend_hours": 前端计算工时,
+              "backend_estimation": {
+                "base_type": "简单接口",
+                "base_hours": 1.0,
+                "complexity_level": "普通",
+                "complexity_coefficient": 1.5,
+                "adjustment_hours": 0.0,
+                "calculated_hours": 1.5,
+                "reuse_status": "新建/部分复用/完全复用",
+                "adjustment_reason": "无调整或具体原因"
+              },
+              "frontend_estimation": null,
               "description": "接口逻辑说明"
             }
           ]
@@ -163,6 +171,8 @@ tags: ["需求分析", "工时预估", "项目管理"]
 **父子关系**：
 - 父级（`level="page"`）：功能/模块级别，包含合计的前后端工时
 - 子级（`level="interface"`）：接口/逻辑级别，通过 `children` 关联到父级
+- 子级非零后端工时必须提供 `backend_estimation`，非零前端工时必须提供 `frontend_estimation`
+- 父级工时禁止人工估值，只能汇总对应子项的 `calculated_hours`
 - CSV只输出 `level="page"` 的工作项
 
 ## 工时预估规则
@@ -211,27 +221,32 @@ tags: ["需求分析", "工时预估", "项目管理"]
 前端工时 = 页面基准工时 × 复杂度系数 + 交互复杂度调整 + 适配调整
 ```
 
+### 强制计算约束
+
+1. 每个非零子项必须填写 `base_type`、`base_hours`、`complexity_level`、`complexity_coefficient`、`adjustment_hours`、`calculated_hours`、`reuse_status`、`adjustment_reason`。
+2. `calculated_hours = base_hours × complexity_coefficient + adjustment_hours`，结果保留一位小数或两位有效小数。
+3. `adjustment_hours` 必须在 -2.0 至 2.0 小时之间；非零调整必须说明原因。
+4. 父级 `backend_hours`、`frontend_hours` 必须分别等于所有子项对应 `calculated_hours` 之和，禁止直接凭经验填写父级工时。
+5. 已有能力复用时必须填写 `reuse_status`：完全复用通常只计算对接与适配；部分复用应降低基准类型或复杂度系数。
+6. Mock、真实外部接口对接、复用跳转必须使用不同基准；复用现有跳转能力不得按完整交易闭环估算。
+7. 通用鉴权、异常处理、日志、状态管理等能力只能在一个工作项计时，其他工作项仅计算增量适配，禁止重复计时。
+8. 单个子项计算工时超过24小时必须继续拆分；纯前端或纯后端子项允许另一侧为0。
+9. CSV必须输出复杂度、估算公式、复用情况和调整原因，确保工时可追溯。
+
 ## 输出规范
 
-### ⚠️ 路径与文件名（必须严格遵守）
+### 文件名约定（固定）
 
-所有产出物必须保存在项目根目录下的 `./output/` 目录中，文件名固定不变：
-
-| 文件 | 固定路径 | 生成者 | 说明 |
-|------|----------|--------|------|
-| 澄清后MD | `./output/clarified-requirement.md` | 大模型（步骤8） | 按TEMPLATES.md模板生成 |
-| 需求拆分JSON | `./output/requirement-split.json` | 大模型（步骤10） | 作为Python脚本输入 |
-| 工作计划CSV | `./output/work-plan.csv` | Python脚本（步骤11） | 读取JSON自动生成 |
-
-**约束规则**：
-- 三个文件的路径和文件名**固定不变**，不随输入内容变化
-- 大模型必须将 `clarified-requirement.md` 和 `requirement-split.json` 写入 `./output/` 目录
-- Python脚本默认输出到 `./output/` 目录（可通过 `--output` 参数指定）
+| 文件 | 固定命名 | 说明 |
+|------|----------|------|
+| 澄清后MD | `clarified-requirement.md` | 包含完整需求分析、工作包定义、技术难度分析 |
+| 需求拆分JSON | `requirement-split.json` | 结构化需求项和工作项数据，作为Python脚本输入 |
+| 工作计划CSV | `work-plan.csv` | 需求项、工作项、前后端工时、说明 |
 
 ### 输出流程
 
 ```
-大模型 → ./output/clarified-requirement.md → ./output/requirement-split.json → Python脚本 → ./output/work-plan.csv
+大模型 → clarified-requirement.md → requirement-split.json → Python脚本 → work-plan.csv
 ```
 
 ## 目录结构
@@ -247,12 +262,8 @@ requirement-split-skill/
 ├── tests/
 │   └── test_requirement_split.py
 ├── assets/                     # 资源目录
-├── samples/
-│   └── sample_output.json      # 示例输出
-└── output/                     # 输出目录（自动生成）
-    ├── clarified-requirement.md    ← 大模型生成
-    ├── requirement-split.json      ← 大模型生成
-    └── work-plan.csv               ← Python脚本生成
+└── samples/
+    └── sample_output.json      # 示例输出
 ```
 
 ## 调用方式

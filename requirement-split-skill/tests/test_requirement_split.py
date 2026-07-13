@@ -4,10 +4,21 @@ import json
 import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'scripts'))
 
-from requirement_split import RequirementItem, WorkItem, CSVGenerator
+from requirement_split import RequirementItem, WorkItem, CSVGenerator, EstimationValidator
 
 
 class TestRequirementSplit(unittest.TestCase):
+    def estimation(self, base_hours=1.0, coefficient=1.5, adjustment=0.0, level="普通"):
+        return {
+            "base_type": "简单接口",
+            "base_hours": base_hours,
+            "complexity_level": level,
+            "complexity_coefficient": coefficient,
+            "adjustment_hours": adjustment,
+            "calculated_hours": base_hours * coefficient + adjustment,
+            "reuse_status": "新建",
+            "adjustment_reason": "无调整" if adjustment == 0 else "复用现有能力"
+        }
     
     def test_requirement_item_from_dict(self):
         data = {
@@ -37,7 +48,7 @@ class TestRequirementSplit(unittest.TestCase):
         self.assertEqual(req.clarifications, ["问题1"])
 
     def test_work_item(self):
-        work_item = WorkItem("接口开发", "后端", 1.0, 0.0, "开发接口")
+        work_item = WorkItem("接口开发", "后端", backend_hours=1.0, frontend_hours=0.0, description="开发接口")
         self.assertEqual(work_item.name, "接口开发")
         self.assertEqual(work_item.type, "后端")
         self.assertEqual(work_item.backend_hours, 1.0)
@@ -46,8 +57,8 @@ class TestRequirementSplit(unittest.TestCase):
 
     def test_generate_work_plan(self):
         req1 = RequirementItem("订单创建", "描述1", "新增")
-        req1.work_items.append(WorkItem("表结构设计", "后端", 1.0, 0.0, "设计"))
-        req1.work_items.append(WorkItem("接口开发", "后端", 0.5, 0.0, "开发"))
+        req1.work_items.append(WorkItem("表结构设计", "后端", backend_hours=1.0, frontend_hours=0.0, description="设计"))
+        req1.work_items.append(WorkItem("接口开发", "后端", backend_hours=0.5, frontend_hours=0.0, description="开发"))
         
         csv = CSVGenerator.generate_work_plan([req1])
         
@@ -58,8 +69,8 @@ class TestRequirementSplit(unittest.TestCase):
 
     def test_generate_work_plan_with_frontend(self):
         req1 = RequirementItem("订单创建", "描述1", "新增")
-        req1.work_items.append(WorkItem("订单表单页面", "前端", 0.0, 3.0, "前端页面"))
-        req1.work_items.append(WorkItem("创建订单接口", "后端", 1.0, 0.0, "后端接口"))
+        req1.work_items.append(WorkItem("订单表单页面", "前端", backend_hours=0.0, frontend_hours=3.0, description="前端页面"))
+        req1.work_items.append(WorkItem("创建订单接口", "后端", backend_hours=1.0, frontend_hours=0.0, description="后端接口"))
         
         csv = CSVGenerator.generate_work_plan([req1])
         
@@ -67,6 +78,20 @@ class TestRequirementSplit(unittest.TestCase):
         self.assertIn("后端", csv)
         self.assertIn("3.0", csv)
         self.assertIn("1.0", csv)
+
+    def test_validate_estimation_and_parent_sum(self):
+        req = RequirementItem("订单创建", "描述", "新增")
+        child = WorkItem("创建接口", "接口开发", "interface", 1.5, 0.0, "开发", None, self.estimation(), None)
+        req.work_items.append(WorkItem("订单创建模块", "功能模块", "page", 1.5, 0.0, "模块", [child]))
+        self.assertEqual(EstimationValidator.validate([req]), [])
+
+    def test_reject_invalid_formula(self):
+        req = RequirementItem("订单创建", "描述", "新增")
+        estimation = self.estimation()
+        estimation["calculated_hours"] = 2.0
+        child = WorkItem("创建接口", "接口开发", "interface", 1.5, 0.0, "开发", None, estimation, None)
+        req.work_items.append(WorkItem("订单创建模块", "功能模块", "page", 1.5, 0.0, "模块", [child]))
+        self.assertTrue(any("公式不成立" in error for error in EstimationValidator.validate([req])))
 
 
 if __name__ == '__main__':

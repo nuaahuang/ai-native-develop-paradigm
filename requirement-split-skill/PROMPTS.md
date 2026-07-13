@@ -41,7 +41,7 @@
 - 技术难度和复杂性分析
 - 工作项拆解与工时预估
 
-请将新MD文档保存到 `./output/clarified-requirement.md` 文件中。
+请将新MD文档保存到 clarified-requirement.md 文件中。
 ```
 
 ## 第三步：基于新MD文档生成JSON
@@ -56,6 +56,9 @@
 3. 工时预估是该功能的总计工时
 4. 前端工时和后端工时分开计算
 5. 禁止输出页面名称、接口开发等工作项
+6. 父级工时只能由子项计算工时汇总，禁止直接凭经验估值
+7. 每个非零子项必须提供前端或后端 estimation 对象并满足计算公式
+8. 必须检查通用能力是否重复计时；复用现有能力时必须降低估算
 
 **正确示例**：
 | 需求项 | 工作项（功能/模块级） |
@@ -96,6 +99,17 @@
               "level": "interface",
               "backend_hours": 工时,
               "frontend_hours": 工时,
+              "backend_estimation": {
+                "base_type": "简单接口",
+                "base_hours": 1.0,
+                "complexity_level": "普通",
+                "complexity_coefficient": 1.5,
+                "adjustment_hours": 0.0,
+                "calculated_hours": 1.5,
+                "reuse_status": "新建",
+                "adjustment_reason": "无调整"
+              },
+              "frontend_estimation": null,
               "description": "说明"
             }
           ]
@@ -137,7 +151,13 @@
 - 状态管理/API对接：1.5/1.0 × 系数
 - 响应式适配：2.0 × 系数
 
-**重要**：
-- JSON必须基于 `./output/clarified-requirement.md` 生成，禁止基于原始需求文档直接生成
-- 将JSON保存到 `./output/requirement-split.json` 文件中
+**重要**：JSON必须基于澄清后的新MD文档生成，禁止基于原始需求文档直接生成。
+
+**强制验算**：
+- `calculated_hours = base_hours × complexity_coefficient + adjustment_hours`
+- 调整工时范围为 -2.0 至 2.0；非零调整必须填写具体原因
+- 父级前后端工时分别等于子项对应 calculated_hours 之和
+- 非零工时必须在 1.0 至 24.0 小时之间，超过24小时继续拆分
+- CSV输出复杂度、估算公式、复用情况、调整原因
+- 任一公式或父子汇总不成立时，终止生成并输出问题清单
 ```
